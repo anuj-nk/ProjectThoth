@@ -1,0 +1,102 @@
+<svg width="680" height="780" viewBox="0 0 680 780" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
+  <title>Project Thoth system diagram for GIX SME workflow</title>
+  <desc>Five-layer architecture showing how an SME's unstructured input flows through intake, LLM synthesis, human review, and into the knowledge base, with explicit approval gates.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#444441" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+
+  <!-- Title -->
+  <text x="40" y="30" font-size="16" font-weight="500" fill="#2C2C2A">Thoth — SME intake flow</text>
+  <text x="40" y="50" font-size="12" fill="#5F5E5A">Unstructured input → structured, approved knowledge</text>
+
+  <!-- Layer 1: Input -->
+  <rect x="40" y="70" width="600" height="64" rx="8" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="60" y="92" font-size="14" font-weight="500" fill="#2C2C2A">1. Input layer</text>
+  <text x="60" y="112" font-size="12" fill="#444441">SME pastes URL, email signature, job description, or free text</text>
+  <text x="60" y="128" font-size="12" fill="#444441">Single smart input — Thoth detects type automatically</text>
+
+  <line x1="340" y1="134" x2="340" y2="158" stroke="#444441" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Layer 2: Agent / Session -->
+  <rect x="40" y="160" width="600" height="90" rx="8" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="60" y="182" font-size="14" font-weight="500" fill="#3C3489">2. Agent layer — session state machine</text>
+  <text x="60" y="202" font-size="12" fill="#3C3489">Tracks which stage the SME is in: profile → topic → interview → review</text>
+  <text x="60" y="220" font-size="12" fill="#3C3489">Routes to the right prompt + seed questions for the current stage</text>
+  <text x="60" y="238" font-size="12" fill="#3C3489">Stored in Supabase sessions table (no Redis needed for PoC)</text>
+
+  <line x1="340" y1="250" x2="340" y2="274" stroke="#444441" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Layer 3a: Extraction -->
+  <rect x="40" y="276" width="290" height="110" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="60" y="298" font-size="14" font-weight="500" fill="#085041">3a. LLM extraction</text>
+  <text x="60" y="318" font-size="12" fill="#085041">Parses input into draft profile:</text>
+  <text x="60" y="334" font-size="12" fill="#085041">name, title, domain, topics,</text>
+  <text x="60" y="350" font-size="12" fill="#085041">exclusions, routing preferences</text>
+  <text x="60" y="368" font-size="12" fill="#085041">Flags low-confidence fields for review</text>
+
+  <!-- Layer 3b: Interview -->
+  <rect x="350" y="276" width="290" height="110" rx="8" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="370" y="298" font-size="14" font-weight="500" fill="#085041">3b. LLM interview</text>
+  <text x="370" y="318" font-size="12" fill="#085041">Pulls seed questions from library</text>
+  <text x="370" y="334" font-size="12" fill="#085041">by domain, asks follow-ups,</text>
+  <text x="370" y="350" font-size="12" fill="#085041">captures scope and tacit knowledge,</text>
+  <text x="370" y="368" font-size="12" fill="#085041">accepts supporting docs (PDF, links)</text>
+
+  <line x1="185" y1="386" x2="185" y2="410" stroke="#444441" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="495" y1="386" x2="495" y2="410" stroke="#444441" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- Layer 4: Human review gate -->
+  <rect x="40" y="412" width="600" height="90" rx="8" fill="#FAEEDA" stroke="#854F0B" stroke-width="1"/>
+  <text x="60" y="434" font-size="14" font-weight="500" fill="#633806">4. Human review gate — SME approval required</text>
+  <text x="60" y="454" font-size="12" fill="#633806">LLM shows synthesized preview side-by-side with SME's raw input</text>
+  <text x="60" y="472" font-size="12" fill="#633806">SME edits fields, confirms topics, approves or rejects entries</text>
+  <text x="60" y="490" font-size="12" fill="#633806">No data is published until SME clicks "approve" — every write is logged</text>
+
+  <line x1="200" y1="502" x2="200" y2="526" stroke="#444441" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="480" y1="502" x2="480" y2="526" stroke="#444441" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <text x="220" y="520" font-size="12" fill="#5F5E5A">approved</text>
+  <text x="500" y="520" font-size="12" fill="#5F5E5A">rejected</text>
+
+  <!-- Layer 5a: Data -->
+  <rect x="40" y="528" width="290" height="110" rx="8" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="60" y="550" font-size="14" font-weight="500" fill="#27500A">5a. Data layer — Supabase</text>
+  <text x="60" y="570" font-size="12" fill="#27500A">sme_profiles (routing metadata)</text>
+  <text x="60" y="586" font-size="12" fill="#27500A">knowledge_entries (+ pgvector)</text>
+  <text x="60" y="602" font-size="12" fill="#27500A">raw_transcripts (hidden from users)</text>
+  <text x="60" y="620" font-size="12" fill="#27500A">tool_call_logs (audit trail)</text>
+
+  <!-- Layer 5b: Revision loop -->
+  <rect x="350" y="528" width="290" height="110" rx="8" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="370" y="550" font-size="14" font-weight="500" fill="#712B13">5b. Revision loop</text>
+  <text x="370" y="570" font-size="12" fill="#712B13">SME edits sent back to stage 3</text>
+  <text x="370" y="586" font-size="12" fill="#712B13">Session state preserves progress</text>
+  <text x="370" y="602" font-size="12" fill="#712B13">Review date set for every entry —</text>
+  <text x="370" y="620" font-size="12" fill="#712B13">triggers re-interview when stale</text>
+
+  <!-- Feedback loop dashed line -->
+  <line x1="495" y1="638" x2="495" y2="672" stroke="#444441" stroke-width="1" marker-end="url(#arrow)"/>
+  <path d="M495 672 L655 672 L655 220 L640 220" fill="none" stroke="#888780" stroke-width="1" stroke-dasharray="4 4" marker-end="url(#arrow)"/>
+
+  <!-- Footnote -->
+  <text x="40" y="700" font-size="11" font-style="italic" fill="#5F5E5A">End-user queries (not shown): a separate flow reads from 5a, routes via sme_profiles,</text>
+  <text x="40" y="715" font-size="11" font-style="italic" fill="#5F5E5A">returns grounded answers with supporting_docs. Raw transcripts never exposed.</text>
+
+  <!-- Legend -->
+  <text x="40" y="752" font-size="11" fill="#5F5E5A">Legend:</text>
+  <rect x="95" y="742" width="12" height="12" rx="2" fill="#F1EFE8" stroke="#5F5E5A" stroke-width="0.5"/>
+  <text x="113" y="752" font-size="11" fill="#5F5E5A">Input</text>
+  <rect x="155" y="742" width="12" height="12" rx="2" fill="#EEEDFE" stroke="#534AB7" stroke-width="0.5"/>
+  <text x="173" y="752" font-size="11" fill="#5F5E5A">Orchestration</text>
+  <rect x="250" y="742" width="12" height="12" rx="2" fill="#E1F5EE" stroke="#0F6E56" stroke-width="0.5"/>
+  <text x="268" y="752" font-size="11" fill="#5F5E5A">LLM work</text>
+  <rect x="330" y="742" width="12" height="12" rx="2" fill="#FAEEDA" stroke="#854F0B" stroke-width="1"/>
+  <text x="348" y="752" font-size="11" fill="#5F5E5A">Human gate</text>
+  <rect x="420" y="742" width="12" height="12" rx="2" fill="#EAF3DE" stroke="#3B6D11" stroke-width="0.5"/>
+  <text x="438" y="752" font-size="11" fill="#5F5E5A">Persistence</text>
+  <rect x="500" y="742" width="12" height="12" rx="2" fill="#FAECE7" stroke="#993C1D" stroke-width="0.5"/>
+  <text x="518" y="752" font-size="11" fill="#5F5E5A">Revision</text>
+</svg>

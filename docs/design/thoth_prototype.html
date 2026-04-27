@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thoth — SME Journey Prototype</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #F1EFE8;
+    color: #2C2C2A;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+  .app {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #D3D1C7;
+  }
+  .brand {
+    font-size: 20px;
+    font-weight: 500;
+    color: #3C3489;
+  }
+  .brand-sub {
+    font-size: 12px;
+    color: #5F5E5A;
+    margin-top: 2px;
+  }
+  .screen-badge {
+    background: #EEEDFE;
+    color: #3C3489;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 22px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  h2 {
+    font-size: 16px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    color: #444441;
+  }
+  .subtitle {
+    color: #5F5E5A;
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  .hint-list {
+    font-size: 13px;
+    color: #5F5E5A;
+    background: #F1EFE8;
+    padding: 12px 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  .hint-list li {
+    list-style: none;
+    padding: 2px 0;
+  }
+  textarea, input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #D3D1C7;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    background: white;
+    resize: vertical;
+  }
+  textarea:focus, input:focus {
+    outline: none;
+    border-color: #534AB7;
+  }
+  .btn {
+    background: #3C3489;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #26215C; }
+  .btn-secondary {
+    background: white;
+    color: #444441;
+    border: 1px solid #D3D1C7;
+  }
+  .btn-secondary:hover { background: #F1EFE8; }
+  .btn-danger {
+    background: white;
+    color: #A32D2D;
+    border: 1px solid #F7C1C1;
+  }
+  .btn-danger:hover { background: #FCEBEB; }
+  .btn-success {
+    background: #3B6D11;
+    color: white;
+    border: none;
+  }
+  .btn-success:hover { background: #27500A; }
+  .btn-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .nav {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    border-radius: 24px;
+    padding: 8px 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 100;
+  }
+  .nav button {
+    background: none;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 16px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #5F5E5A;
+  }
+  .nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .nav button.primary { background: #3C3489; color: white; }
+  .nav .dots { display: flex; gap: 4px; margin: 0 8px; }
+  .nav .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #D3D1C7;
+  }
+  .nav .dot.active { background: #3C3489; }
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: #5F5E5A;
+  }
+  .spinner {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    border: 3px solid #D3D1C7;
+    border-top-color: #3C3489;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .col-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888780;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .source-box {
+    background: #F1EFE8;
+    padding: 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #444441;
+    white-space: pre-wrap;
+    font-family: 'SF Mono', Monaco, monospace;
+    line-height: 1.6;
+    min-height: 120px;
+  }
+  .field {
+    margin-bottom: 14px;
+  }
+  .field-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: #444441;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .field-value {
+    padding: 8px 12px;
+    background: #F1EFE8;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  .field-value.editable {
+    border: 1px solid #D3D1C7;
+    background: white;
+  }
+  .confidence-low {
+    background: #FAC775;
+    color: #633806;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .confidence-note {
+    background: #FAEEDA;
+    border-left: 3px solid #854F0B;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #633806;
+    margin-top: 12px;
+  }
+  .chip {
+    display: inline-block;
+    padding: 4px 10px;
+    background: #EEEDFE;
+    color: #3C3489;
+    border-radius: 12px;
+    font-size: 12px;
+    margin: 2px 4px 2px 0;
+  }
+  .chip-exclusion {
+    background: #FCEBEB;
+    color: #A32D2D;
+  }
+  .chat-turn {
+    margin-bottom: 16px;
+  }
+  .chat-bot {
+    background: #EEEDFE;
+    color: #26215C;
+    padding: 12px 16px;
+    border-radius: 12px 12px 12px 2px;
+    max-width: 80%;
+    font-size: 14px;
+  }
+  .chat-user {
+    background: #F1EFE8;
+    color: #2C2C2A;
+    padding: 12px 16px;
+    border-radius: 12px 12px 2px 12px;
+    max-width: 80%;
+    margin-left: auto;
+    font-size: 14px;
+  }
+  .progress-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+  .progress-step {
+    flex: 1;
+    height: 4px;
+    background: #D3D1C7;
+    border-radius: 2px;
+  }
+  .progress-step.active { background: #3C3489; }
+  .progress-step.done { background: #97C459; }
+  .stage-label {
+    font-size: 11px;
+    color: #5F5E5A;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+  }
+  .upload-box {
+    border: 2px dashed #D3D1C7;
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    color: #5F5E5A;
+    font-size: 13px;
+    cursor: pointer;
+    margin-top: 12px;
+  }
+  .upload-box:hover { border-color: #534AB7; background: #F1EFE8; }
+  .file-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #E1F5EE;
+    color: #085041;
+    padding: 6px 12px;
+    border-radius: 16px;
+    font-size: 12px;
+    margin: 8px 6px 0 0;
+  }
+  .entry-card {
+    border: 1px solid #D3D1C7;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+  .entry-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .entry-topic {
+    font-size: 11px;
+    color: #534AB7;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 500;
+  }
+  .entry-question {
+    font-weight: 500;
+    font-size: 14px;
+    margin: 4px 0 8px;
+  }
+  .entry-answer {
+    font-size: 13px;
+    color: #444441;
+    line-height: 1.6;
+  }
+  .entry-source {
+    font-size: 11px;
+    color: #5F5E5A;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #F1EFE8;
+  }
+  .tag-row { margin: 8px 0; }
+  .status-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .status-pending { background: #FAEEDA; color: #633806; }
+  .status-approved { background: #EAF3DE; color: #27500A; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="brand">Thoth</div>
+      <div class="brand-sub">GIX SME Onboarding — prototype v0.1</div>
+    </div>
+    <div class="screen-badge" id="screenBadge">Screen 1 / 8</div>
+  </div>
+
+  <div id="screenContainer"></div>
+</div>
+
+<div class="nav">
+  <button id="prevBtn" onclick="prevScreen()">← Back</button>
+  <div class="dots" id="dots"></div>
+  <button id="nextBtn" class="primary" onclick="nextScreen()">Next →</button>
+</div>
+
+<script>
+const screens = [
+  // Screen 1: Entry
+  `
+    <div class="card">
+      <h1>Welcome to Thoth</h1>
+      <p class="subtitle">I'll help you share your knowledge with GIX students — without filling out a 20-field form. Let's start with who you are.</p>
+
+      <h2>Tell me about yourself</h2>
+      <div class="hint-list">
+        <li>• Paste a link to your GIX profile page, or</li>
+        <li>• Paste your email signature, or</li>
+        <li>• Paste a job description, or</li>
+        <li>• Just describe your role in a few sentences</li>
+      </div>
+      <textarea rows="4" placeholder="Paste a link or describe your role...">https://gix.uw.edu/about/people/patrick-chidsey/</textarea>
+      <div class="btn-row">
+        <button class="btn">Let Thoth figure it out →</button>
+      </div>
+    </div>
+  `,
+
+  // Screen 2: Parsing
+  `
+    <div class="card">
+      <div class="loading">
+        <div class="spinner"></div>
+        <div style="font-size: 15px; color: #3C3489; font-weight: 500; margin-bottom: 6px;">Reading your profile page...</div>
+        <div style="font-size: 13px;">Extracting name, title, domain, and areas of expertise</div>
+      </div>
+    </div>
+  `,
+
+  // Screen 3: Extraction review (two columns)
+  `
+    <div class="card">
+      <h1>Here's what I found</h1>
+      <p class="subtitle">Please review and correct anything I got wrong. Fields I wasn't sure about are flagged.</p>
+
+      <div class="two-col">
+        <div>
+          <div class="col-label">What you gave me</div>
+          <div class="source-box">https://gix.uw.edu/about/people/patrick-chidsey/
+
+Patrick Chidsey
+Assistant Director, Career Services & Industry Engagement
+Global Innovation Exchange, University of Washington
+Email: chidsey@uw.edu
+Phone: 206-245-3105
+
+Patrick supports MSTI students with internship search, CPT applications, career coaching, and industry networking...</div>
+        </div>
+        <div>
+          <div class="col-label">What I extracted</div>
+          <div class="field">
+            <div class="field-label">Name</div>
+            <div class="field-value editable">Patrick Chidsey</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Title</div>
+            <div class="field-value editable">Assistant Director, Career Services &amp; Industry Engagement</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Email</div>
+            <div class="field-value editable">chidsey@uw.edu</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Domain <span class="confidence-low">High confidence</span></div>
+            <div class="field-value editable">Career Services</div>
+          </div>
+          <div class="field">
+            <div class="field-label">Initial topics <span class="confidence-low">Review needed</span></div>
+            <div class="field-value editable">
+              <span class="chip">internship_search</span>
+              <span class="chip">cpt_applications</span>
+              <span class="chip">career_coaching</span>
+              <span class="chip">industry_networking</span>
+              <span class="chip" style="background:white;border:1px dashed #D3D1C7;color:#5F5E5A;">+ add</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="confidence-note">
+        <strong>Note:</strong> I inferred "career_coaching" from the word "coaching" on your page but it wasn't explicitly stated. You may want to refine or remove it.
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-secondary btn">Edit fields</button>
+        <button class="btn">Looks good, continue →</button>
+      </div>
+    </div>
+  `,
+
+  // Screen 4: Exclusions and Routing (Modules 3 & 4)
+  `
+    <div class="card">
+      <h1>A few more questions</h1>
+      <p class="subtitle">This helps Thoth route students to you — and only to you — when it's actually your area.</p>
+
+      <div class="progress-bar">
+        <div class="progress-step done"></div>
+        <div class="progress-step done"></div>
+        <div class="progress-step active"></div>
+        <div class="progress-step"></div>
+      </div>
+      <div class="stage-label">Step 3 of 4 · Boundaries &amp; routing</div>
+
+      <h2 style="margin-top: 20px;">What's adjacent to your area but NOT your responsibility?</h2>
+      <p style="font-size: 13px; color: #5F5E5A; margin-bottom: 12px;">Students often confuse these. Tell me who they should go to instead.</p>
+      <div class="field">
+        <label style="display: block; padding: 10px; background: #F1EFE8; border-radius: 6px; margin-bottom: 6px; cursor: pointer;">
+          <input type="checkbox" checked> F-1 visa status decisions → <em>route to UW ISS Office</em>
+        </label>
+        <label style="display: block; padding: 10px; background: #F1EFE8; border-radius: 6px; margin-bottom: 6px; cursor: pointer;">
+          <input type="checkbox" checked> MSTI course petitions &amp; independent study → <em>route to Kara Fichthorn</em>
+        </label>
+        <label style="display: block; padding: 10px; background: #F1EFE8; border-radius: 6px; margin-bottom: 6px; cursor: pointer;">
+          <input type="checkbox"> Academic transcript questions → <em>route to Jason Evans</em>
+        </label>
+        <label style="display: block; padding: 10px; background: white; border: 1px dashed #D3D1C7; border-radius: 6px; margin-bottom: 6px; cursor: pointer; color: #5F5E5A;">
+          + Add another exclusion
+        </label>
+      </div>
+
+      <h2 style="margin-top: 28px;">When Thoth can't answer, how should it reach you?</h2>
+      <p style="font-size: 13px; color: #5F5E5A; margin-bottom: 12px;">Drag to reorder by preference.</p>
+      <div class="field">
+        <div style="padding: 10px 14px; background: #EEEDFE; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between;">
+          <span>⋮⋮ Teams message</span><span style="color: #5F5E5A; font-size: 12px;">1st choice</span>
+        </div>
+        <div style="padding: 10px 14px; background: #F1EFE8; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between;">
+          <span>⋮⋮ Email (chidsey@uw.edu)</span><span style="color: #5F5E5A; font-size: 12px;">within 24h</span>
+        </div>
+        <div style="padding: 10px 14px; background: #F1EFE8; border-radius: 6px; margin-bottom: 6px; display: flex; justify-content: space-between;">
+          <span>⋮⋮ Book 1:1 (scheduling link)</span><span style="color: #5F5E5A; font-size: 12px;">for complex issues</span>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-secondary btn">← Back</button>
+        <button class="btn">Start the interview →</button>
+      </div>
+    </div>
+  `,
+
+  // Screen 5: Interview begins
+  `
+    <div class="card">
+      <div class="stage-label">Step 4 of 4 · Knowledge interview</div>
+      <h1 style="margin-bottom: 4px;">Let's talk about your work</h1>
+      <p class="subtitle">I'll ask a few open-ended questions. Answer however you normally would — bullet points, full sentences, whatever. You can upload documents along the way.</p>
+
+      <div style="background: #F1EFE8; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <div class="chat-turn">
+          <div class="chat-bot">
+            <strong>Thoth</strong><br><br>
+            Walk me through what happens from the moment a student receives an internship offer to their first day of work. What are the steps students often miss or get wrong?
+          </div>
+        </div>
+        <div class="chat-turn">
+          <div class="chat-user">
+            The big one is TECHIN 601 enrollment. F-1 students need to be enrolled in it <em>during</em> their internship — not after. I give them the add code. Also they need to submit CPT via MyISSS at least 2 weeks before their start date, and people always underestimate that timeline. I tell them to negotiate their start date with that in mind.
+          </div>
+        </div>
+        <div class="chat-turn">
+          <div class="chat-bot">
+            <strong>Thoth</strong><br><br>
+            Got it. Do you have a document or email template you usually send when a student accepts an offer? If so, upload it — I can use it to ground future answers.
+
+            <div class="upload-box" style="margin-top: 16px;">
+              📎 Drop a file here, or click to browse<br>
+              <span style="font-size: 11px;">PDF, DOCX, TXT — Thoth will cite this when relevant</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <textarea rows="2" placeholder="Type your response..."></textarea>
+      <div class="btn-row">
+        <button class="btn-secondary btn">🎤 Voice instead</button>
+        <button class="btn">Send</button>
+      </div>
+    </div>
+  `,
+
+  // Screen 6: Document uploaded, new follow-up
+  `
+    <div class="card">
+      <div class="stage-label">Step 4 of 4 · Knowledge interview</div>
+      <h1 style="margin-bottom: 4px;">Thanks — I've got your materials</h1>
+      <p class="subtitle">I'll use these as citations. A couple more questions to round things out.</p>
+
+      <div style="background: #F1EFE8; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <div class="chat-turn">
+          <div class="chat-bot">
+            <strong>Thoth</strong><br><br>
+            Thanks! I've received these:
+            <div style="margin-top: 10px;">
+              <span class="file-pill">📄 Internship Acceptance Checklist.pdf</span>
+              <span class="file-pill">📄 TECHIN 601 Syllabus.pdf</span>
+            </div>
+            <br>
+            One quick thing — your checklist mentions a "$59/credit" fee for TECHIN 601. Is that still current? And is this something you want Thoth to share with students directly, or should it always route those questions to you?
+          </div>
+        </div>
+        <div class="chat-turn">
+          <div class="chat-user">
+            Yes, still $59/credit as of this quarter. Thoth can share it, but if a student asks about fee waivers or payment issues, route to me — those are case-by-case.
+          </div>
+        </div>
+        <div class="chat-turn">
+          <div class="chat-bot">
+            <strong>Thoth</strong><br><br>
+            Perfect. Last one — what's the most common CPT/internship mistake you see students make that <em>isn't</em> written down in any official document?
+          </div>
+        </div>
+      </div>
+
+      <textarea rows="2" placeholder="Type your response..."></textarea>
+      <div class="btn-row">
+        <button class="btn-secondary btn">End interview</button>
+        <button class="btn">Send</button>
+      </div>
+    </div>
+  `,
+
+  // Screen 7: Synthesis preview
+  `
+    <div class="card">
+      <h1>Here's what I learned from you</h1>
+      <p class="subtitle">I've turned our conversation into 4 knowledge entries. Please review each one — you can edit, approve, or reject them individually. Nothing goes live until you approve.</p>
+
+      <div class="entry-card">
+        <div class="entry-header">
+          <div>
+            <div class="entry-topic">CPT_APPLICATIONS</div>
+            <div class="entry-question">When should F-1 students start their CPT application?</div>
+          </div>
+          <span class="status-badge status-pending">Pending review</span>
+        </div>
+        <div class="entry-answer">F-1 students should submit CPT via MyISSS at least <strong>2 weeks before</strong> their intended start date. They must first enroll in TECHIN 601 (a fee-based course at $59/credit) using an add code from Patrick Chidsey. Start dates should be negotiated with this timeline in mind.</div>
+        <div class="entry-source">Source: Interview + <em>Internship Acceptance Checklist.pdf</em> · Exposable to students: ✓ yes</div>
+        <div class="btn-row">
+          <button class="btn-secondary btn">Edit</button>
+          <button class="btn-success btn">✓ Approve</button>
+          <button class="btn-danger btn">Reject</button>
+        </div>
+      </div>
+
+      <div class="entry-card">
+        <div class="entry-header">
+          <div>
+            <div class="entry-topic">TECHIN_601</div>
+            <div class="entry-question">What is TECHIN 601 and who needs it?</div>
+          </div>
+          <span class="status-badge status-approved">Approved</span>
+        </div>
+        <div class="entry-answer">TECHIN 601 is the enrollment course F-1 students must be registered in <em>while working</em> their internship, to comply with federal immigration regulations. Cost: $59/credit, paid via MyUW after registration.</div>
+        <div class="entry-source">Source: Interview + <em>TECHIN 601 Syllabus.pdf</em> · Exposable to students: ✓ yes</div>
+      </div>
+
+      <div class="entry-card">
+        <div class="entry-header">
+          <div>
+            <div class="entry-topic">CPT_APPLICATIONS</div>
+            <div class="entry-question">Can I get a fee waiver for TECHIN 601?</div>
+          </div>
+          <span class="status-badge status-pending">Pending review</span>
+        </div>
+        <div class="entry-answer"><em>Route to Patrick Chidsey</em> — fee waivers and payment issues are handled case-by-case and should not be answered directly.</div>
+        <div class="entry-source">Source: Interview · Exposable to students: route-only (no direct answer)</div>
+        <div class="btn-row">
+          <button class="btn-secondary btn">Edit</button>
+          <button class="btn-success btn">✓ Approve</button>
+          <button class="btn-danger btn">Reject</button>
+        </div>
+      </div>
+
+      <div class="entry-card" style="background: #FCEBEB; border-color: #F7C1C1;">
+        <div class="entry-header">
+          <div>
+            <div class="entry-topic" style="color: #A32D2D;">⚠ RAW TRANSCRIPT — NOT PUBLISHED</div>
+            <div class="entry-question">Full interview transcript (internal only)</div>
+          </div>
+        </div>
+        <div class="entry-answer" style="color: #5F5E5A; font-style: italic;">Stored for audit and future re-synthesis. Never exposed to students.</div>
+      </div>
+    </div>
+  `,
+
+  // Screen 8: Final confirmation
+  `
+    <div class="card" style="text-align: center; padding: 48px 28px;">
+      <div style="width: 64px; height: 64px; background: #EAF3DE; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 32px;">✓</div>
+      <h1>You're all set, Patrick</h1>
+      <p class="subtitle" style="max-width: 480px; margin: 0 auto 24px;">3 of 4 entries are live in the GIX knowledge base. Students asking about CPT, TECHIN 601, or internship timelines will now get grounded answers — with citations to your materials.</p>
+
+      <div style="background: #F1EFE8; border-radius: 8px; padding: 16px; max-width: 400px; margin: 0 auto 24px; text-align: left; font-size: 13px;">
+        <div style="font-weight: 500; margin-bottom: 8px;">What happens next:</div>
+        <div style="color: #444441; line-height: 1.8;">
+          • Thoth will review these entries in <strong>90 days</strong><br>
+          • If students ask anything outside your scope, routing rules kick in<br>
+          • You can update or add entries anytime at <span style="color: #3C3489;">thoth.gix.uw.edu</span>
+        </div>
+      </div>
+
+      <div class="btn-row" style="justify-content: center;">
+        <button class="btn-secondary btn">Add another topic</button>
+        <button class="btn">Done — exit</button>
+      </div>
+    </div>
+  `
+];
+
+const stageLabels = [
+  "1. Entry",
+  "2. LLM parsing",
+  "3. Extraction review",
+  "4. Exclusions + routing",
+  "5. Interview opens",
+  "6. Docs + follow-ups",
+  "7. Synthesis + approval",
+  "8. Confirmation"
+];
+
+let currentScreen = 0;
+
+function render() {
+  document.getElementById('screenContainer').innerHTML = screens[currentScreen];
+  document.getElementById('screenBadge').textContent = `Screen ${currentScreen + 1} / 8 · ${stageLabels[currentScreen]}`;
+  document.getElementById('prevBtn').disabled = currentScreen === 0;
+  document.getElementById('nextBtn').disabled = currentScreen === screens.length - 1;
+
+  const dots = screens.map((_, i) => `<div class="dot ${i === currentScreen ? 'active' : ''}"></div>`).join('');
+  document.getElementById('dots').innerHTML = dots;
+
+  window.scrollTo(0, 0);
+}
+
+function nextScreen() {
+  if (currentScreen < screens.length - 1) { currentScreen++; render(); }
+}
+
+function prevScreen() {
+  if (currentScreen > 0) { currentScreen--; render(); }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') nextScreen();
+  if (e.key === 'ArrowLeft') prevScreen();
+});
+
+render();
+</script>
+</body>
+</html>
