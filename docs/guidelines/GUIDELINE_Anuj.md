@@ -6,7 +6,7 @@
 
 ## ⚠️ Before You Start (Read This Every Time)
 
-**Always pull the latest PRD and README from GitHub before starting work or asking AI for help.**
+**Always pull the latest PRD, README, AND your guideline from GitHub before starting work or asking AI for help.** All three may have been updated.
 
 ```bash
 git checkout main
@@ -33,7 +33,7 @@ The PRD and project README are the source of truth. They get updated as the team
 
 ### Working principles
 - **You authored the scaffold.** Suzy and Iris build on top of your components, not in parallel.
-- **Suzy's `seed_questions_*.yaml` files are the source of interview questions.** Your interview prompt should load them at runtime, not hardcode questions.
+- **The `seed_questions_*.yaml` files in `src/data/seed_questions/` are the source of interview questions.** Your interview prompt should load them at runtime, not hardcode questions.
 - **Lewis maintains the seed questions.** When he updates a YAML, your code should pick it up automatically (no code change needed).
 
 ---
@@ -332,18 +332,18 @@ If a type is used in more than one file, define it in `types/index.ts` and impor
 ### Task: Build the interview orchestrator (B2)
 
 **Tell the AI:**
-> "Build the interview orchestrator function in `src/app/api/sme/interview/route.ts` for Project Thoth. PRD §F2 attached. The flow:
+> "Build the interview orchestrator function in `src/app/api/sme/interview/route.ts` for Project Thoth. PRD §F2 attached. Also see §5.3.2 SME Intake Pipeline for the 5-layer flow this orchestrator implements. The flow:
 >
-> 1. On session start, look up the SME's `domain` and load the matching `seed_questions_<domain>.yaml`
+> 1. On session start, look up the SME's `domain` and load the matching `src/data/seed_questions/<domain>.yaml`
 > 2. Pick one opening question from the `opening_questions` category
 > 3. After each SME response, decide: (a) ask a generated follow-up to go deeper, (b) pick the next seed question from a different category (boundary probes, evidence probes, exposure policy probes), (c) move on
 > 4. Aim for 10-15 total exchanges
 > 5. Always include at least 1 boundary probe and 1 evidence probe before ending
 > 6. Append every turn to `interview_sessions.message_history` and `raw_transcripts.messages` (jsonb)
 >
-> The seed YAML structure is given in `seed_questions_career_services.yaml` (paste below). Make the orchestrator read YAML at runtime so Lewis's edits flow through without code changes.
+> The seed YAML structure is given in `src/data/seed_questions/career_services.yaml` (paste below). Make the orchestrator read YAML at runtime so Lewis's edits flow through without code changes.
 >
-> [paste seed_questions_career_services.yaml]
+> [paste src/data/seed_questions/career_services.yaml]
 >
 > [paste PRD §F2 and §5.4]"
 
@@ -392,6 +392,7 @@ Key rules:
 5. Seed questions load from YAML at runtime; don't hardcode interview questions.
 6. Confidence threshold lives in process.env.CONFIDENCE_THRESHOLD, default 0.75 — don't hardcode.
 7. Embeddings generate at admin publish time, not SME approve time.
+8. The 5 LLM prompts (extraction / interview / synthesis / answering / routing) are catalogued in PRD §5.2 LLM Prompt Catalog.
 
 [Paste relevant PRD sections]
 [Paste current code if you're modifying it]

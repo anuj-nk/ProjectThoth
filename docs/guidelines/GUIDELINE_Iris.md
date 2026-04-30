@@ -6,7 +6,7 @@
 
 ## ⚠️ Before You Start (Read This Every Time)
 
-**Always pull the latest PRD and README from GitHub before starting work or asking AI for help.**
+**Always pull the latest PRD, README, AND your guideline from GitHub before starting work or asking AI for help.** All three may have been updated.
 
 ```bash
 git checkout main
@@ -320,7 +320,7 @@ Every screen that fetches data must handle: loading state (spinner / skeleton), 
 ### Task: Implement the query API route with three-path routing (E2-E7)
 
 **Tell the AI:**
-> "Build `src/app/api/query/route.ts` for Project Thoth. PRD §F6 attached. The flow is: (1) generate embedding for `question` using OpenAI `text-embedding-3-small` via the embedding wrapper in `lib/claude.ts`, (2) vector search on `knowledge_entries` table filtered by `status='approved'` using the function in `lib/supabase.ts`, (3) compare top similarity score to `process.env.CONFIDENCE_THRESHOLD` (default 0.75), (4) if above threshold, generate a grounded answer via `askLLM()` with strict citation requirements, (5) if below threshold but a likely SME owner exists, return `sme_redirect`, (6) else return `admin_fallback`. Match exact response shapes in PRD §5.5. Use field names from PRD §5.4 (e.g., `entry_id`, `sme_id`, never `id`)."
+> "Build `src/app/api/query/route.ts` for Project Thoth. PRD §F6 attached. Also see §5.3.3 User Query Flow which shows the exact retrieval → confidence check → routing flow this endpoint implements. The flow is: (1) generate embedding for `question` using OpenAI `text-embedding-3-small` via the embedding wrapper in `lib/claude.ts`, (2) vector search on `knowledge_entries` table filtered by `status='approved'` using the function in `lib/supabase.ts`, (3) compare top similarity score to `process.env.CONFIDENCE_THRESHOLD` (default 0.75), (4) if above threshold, generate a grounded answer via `askLLM()` with strict citation requirements, (5) if below threshold but a likely SME owner exists, return `sme_redirect`, (6) else return `admin_fallback`. Match exact response shapes in PRD §5.5. Use field names from PRD §5.4 (e.g., `entry_id`, `sme_id`, never `id`)."
 
 ### Task: Build the provider-agnostic LLM wrapper (G4)
 
@@ -359,6 +359,7 @@ Key rules:
 4. LLM JSON outputs must be try/catch wrapped — gpt-oss-20b often returns malformed JSON.
 5. Visual style: Linear / Notion / Vercel — Tailwind defaults, no flashy animations.
 6. Use TypeScript types from src/types/index.ts; don't redefine.
+7. The 5 LLM prompts (extraction / interview / synthesis / answering / routing) are catalogued in PRD §5.2 LLM Prompt Catalog.
 
 [Paste relevant PRD sections]
 [Paste any existing code you're modifying]

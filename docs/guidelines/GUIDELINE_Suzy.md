@@ -6,7 +6,7 @@
 
 ## ⚠️ Before You Start (Read This Every Time)
 
-**Always pull the latest PRD and README from GitHub before starting work or asking AI for help.**
+**Always pull the latest PRD, README, AND your guideline from GitHub before starting work or asking AI for help.** All three may have been updated.
 
 ```bash
 git checkout main
@@ -33,7 +33,7 @@ The PRD and project README are the source of truth. They get updated as the team
 ### Working principles
 - **You are the design lead.** Your `thoth_prototype.html` is the visual reference for the whole SME side.
 - **Anuj's scaffold is the shared codebase.** You iterate on his `SMEOnboarding.tsx` rather than rewriting from scratch.
-- **Seed questions come from Lewis.** Don't hardcode interview questions — they live in `seed_questions_*.yaml`.
+- **Seed questions come from Lewis.** Don't hardcode interview questions — they live in `src/data/seed_questions/*.yaml`.
 
 ---
 
@@ -113,7 +113,7 @@ Open [http://localhost:3000](http://localhost:3000) and switch to "SME Portal" t
 ### Step 5: Verify your environment works
 - Navigate to the SME onboarding flow
 - The current scaffold (Anuj's version) should at least load
-- Compare against `thoth_prototype.html` in your browser to see what it should look like
+- Compare against `docs/design/thoth_prototype.html` in your browser to see what it should look like
 - Check the browser console for errors
 
 ---

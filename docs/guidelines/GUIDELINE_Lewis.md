@@ -6,7 +6,7 @@
 
 ## ⚠️ Before You Start (Read This Every Time)
 
-**Always pull the latest PRD and README from GitHub before starting work or asking AI for help.**
+**Always pull the latest PRD, README, AND your guideline from GitHub before starting work or asking AI for help.** All three may have been updated.
 
 ```bash
 git checkout main
@@ -23,7 +23,7 @@ The PRD and project README are the source of truth. They get updated as the team
 **Your focus:** Content + Documentation
 
 ### Your specific tasks
-- Maintain the seed question libraries (`seed_questions_career_services.yaml` is done; `seed_questions_makerspace.yaml` is next)
+- Maintain the seed question libraries (`career_services.yaml` is done; `makerspace.yaml` is next — both in `src/data/seed_questions/`)
 - Write and iterate on the demo script for each milestone (CI-1, CI-2, IE, FE)
 - Author final written deliverables: architecture document, production roadmap, effort visualization
 - Help refine prompt language when domain-specific phrasing matters
@@ -340,7 +340,7 @@ This will also be a final deliverable. Synthesize PRD §5 (Technical Architectur
 ### Task: Build the Makerspace seed question library (B6)
 
 **Tell the AI:**
-> "I'm working on Project Thoth. I need to write `seed_questions_makerspace.yaml` for the GIX Makerspace domain. The reference SME is Kevin or Zubin. The structure must match `seed_questions_career_services.yaml` (paste below) — same six categories: opening_questions, tacit_knowledge_probes, boundary_probes, evidence_probes, exposure_policy_probes, maintenance_probes, plus a closing section.
+> "I'm working on Project Thoth. I need to write `src/data/seed_questions/makerspace.yaml` for the GIX Makerspace domain. The reference SME is Kevin or Zubin. The structure must match `src/data/seed_questions/career_services.yaml` (paste below) — same six categories: opening_questions, tacit_knowledge_probes, boundary_probes, evidence_probes, exposure_policy_probes, maintenance_probes, plus a closing section.
 >
 > Aim for: 4 opening questions, 5 tacit knowledge probes, 4 boundary probes, 4 evidence probes, 3 exposure policy probes, 2 maintenance probes, 2 closing.
 >
@@ -352,7 +352,7 @@ This will also be a final deliverable. Synthesize PRD §5 (Technical Architectur
 > 3. Request evidence (training docs, safety guides, equipment lists)
 > 4. Be open-ended, no yes/no
 >
-> [paste seed_questions_career_services.yaml]"
+> [paste src/data/seed_questions/career_services.yaml]"
 
 ### Task: Write the CI-1 demo script (H2)
 
@@ -366,7 +366,7 @@ This will also be a final deliverable. Synthesize PRD §5 (Technical Architectur
 > - Each stage labeled with stage number, expected duration, who speaks, what they do, what the audience sees, and the narration
 > - Anticipated Q&A (questions evaluators may ask, with prepared answers)
 >
-> Reference PRD §3.2 (success criteria), §6 (timeline), §11.1 (technology rationale).
+> Reference PRD §3.2 (success criteria), §6 (timeline), §11.1 (technology rationale), and §5.3.3 User Query Flow (which shows the three-path routing logic that the demo will exercise).
 >
 > [paste relevant PRD sections]"
 
@@ -422,7 +422,7 @@ Task: [describe the task]
 Push back. Examples:
 - AI suggests yes/no questions → "Questions must be open-ended"
 - AI proposes a new category outside the six → "Stick to opening / tacit / boundary / evidence / exposure / maintenance — adding new ones requires team agreement"
-- AI ignores Suzy's prototype design when writing demo narration → "Reference the actual UX in `thoth_prototype.html`, not invented UI"
+- AI ignores Suzy's prototype design when writing demo narration → "Reference the actual UX in `docs/design/thoth_prototype.html`, not invented UI"
 
 ---
 

@@ -333,6 +333,18 @@ project-thoth/
 - **Embedding model:** OpenAI `text-embedding-3-small` (1536 dim)
 - **Prompt library:** Versioned per use case (extraction, interview, synthesis, answering, routing). Interview prompt is fed by Suzy's `seed_questions_*.yaml` libraries.
 
+#### LLM Prompt Catalog
+
+The system uses 5 distinct LLM calls, each with a specific purpose. All prompts live in `lib/claude.ts` and are versioned in Git.
+
+| Prompt | Input | Output | Triggered by |
+|---|---|---|---|
+| **Profile extraction** | Raw text (URL content, signature, free text) | JSON: draft profile + confidence_notes | SME onboarding (Screen 2) |
+| **Interview** | SME profile + seed questions YAML + conversation history | Next question + category tag | Each turn of SME interview |
+| **Synthesis** | Full interview transcript + uploaded docs | JSON array of 4-6 structured knowledge entries | End of SME interview |
+| **Answering** | User question + top-k retrieved entries (above confidence threshold) | Grounded answer + citations | User query (KB answer path) |
+| **Routing** | User question + SME profiles + retrieval confidence | JSON: path decision (kb_answer / sme_redirect / admin_fallback / clarification) | User query (always runs first) |
+
 #### Frontend Layer (Next.js App Router)
 - **SME flow:** 8-screen intake/interview/review flow (`SMEOnboarding.tsx`)
 - **End-user flow:** Conversational chat interface with citations (`UserChat.tsx`)
@@ -341,9 +353,8 @@ project-thoth/
 
 ### 5.3 Architecture Overview
 
-```
 ┌─────────────────────────────────────────────┐
-│                  Next.js App                 │
+│                 Next.js App                 │
 │                                             │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  │
 │  │   User   │  │   SME    │  │  Admin   │  │
@@ -352,27 +363,37 @@ project-thoth/
 │       │              │              │        │
 │  ┌────▼──────────────▼──────────────▼─────┐ │
 │  │           API Routes                    │ │
-│  │  /api/query  /api/sme/*  /api/kb/*      │ │
+│  │  /api/query  /api/sme/*  /api/kb/*     │ │
 │  └────┬──────────────┬────────────────────┘ │
-│       │              │                      │
-│  ┌────▼──────┐  ┌────▼──────────────────┐  │
-│  │  Claude   │  │    Supabase            │  │
-│  │  (LLM)    │  │  ┌─────────────────┐  │  │
-│  │           │  │  │ PostgreSQL       │  │  │
-│  │ Interview │  │  │ - sme_profiles   │  │  │
-│  │ Synthesis │  │  │ - kb_entries     │  │  │
-│  │ Routing   │  │  │ - interviews     │  │  │
-│  └───────────┘  │  │ - documents      │  │  │
-│                 │  │ - query_logs     │  │  │
-│  ┌────────────┐ │  ├─────────────────┤  │  │
-│  │  OpenAI   │ │  │ pgvector         │  │  │
-│  │ Embeddings│─┼──│ (semantic search)│  │  │
-│  └────────────┘ │  └─────────────────┘  │  │
-│                 └───────────────────────┘  │
-└─────────────────────────────────────────────┘
-```
+│       │              │                       │
+│  ┌────▼──────────┐  ┌▼──────────────────┐   │
+│  │  OpenRouter   │  │    Supabase        │   │
+│  │   (LLM)       │  │  ┌──────────────┐ │   │
+│  │               │  │  │  PostgreSQL  │ │   │
+│  │  Extraction   │  │  │              │ │   │
+│  │  Interview    │  │  │ 4 core tables:│ │   │
+│  │  Synthesis    │  │  │ - sme_profiles│ │   │
+│  │  Answering    │  │  │ - knowledge_  │ │   │
+│  │  Routing      │  │  │   entries     │ │   │
+│  └───────────────┘  │  │ - raw_        │ │   │
+│                     │  │   transcripts │ │   │
+│  ┌──────────────┐   │  │ - interview_  │ │   │
+│  │   OpenAI     │   │  │   sessions    │ │   │
+│  │  Embeddings  │───┼──│              │ │   │
+│  └──────────────┘   │  │ + pgvector   │ │   │
+│                     │  │   (semantic   │ │   │
+│                     │  │    search)    │ │   │
+│                     │  └──────────────┘ │   │
+│                     │  ┌──────────────┐ │   │
+│                     │  │   Storage    │ │   │
+│                     │  │   (PDFs/text)│ │   │
+│                     │  └──────────────┘ │   │
+│                     └────────────────────┘   │
+└──────────────────────────────────────────────┘
 
-#### SME Intake Pipeline
+(query_logs table planned for CI-2)
+
+#### 5.3.1 SME Intake Pipeline
 
 ```
 Layer 1: Input
@@ -393,6 +414,68 @@ Layer 4: Two-Tier Human Review Gate
 Layer 5a: Data Layer       Layer 5b: Revision Loop
    Writes to Supabase         Cycles back to interview
    Generates embeddings       Preserves session state
+```
+
+#### 5.3.2 User Query Flow 
+
+```
+User asks: "When can I work off-campus?"
+    ↓
+Layer 1: Embedding generation
+    OpenAI text-embedding-3-small → 1536-dim vector
+    ↓
+Layer 2: Vector retrieval (Supabase pgvector)
+    SQL: SELECT * FROM knowledge_entries
+         WHERE status='approved' AND exposable_to_users=true
+         ORDER BY embedding <=> query_vector LIMIT 5
+    ↓
+Layer 3: Confidence threshold check
+    Top similarity score > 0.75?
+    ↓
+    ┌─────────┴──────────┐
+   YES                   NO
+    ↓                     ↓
+Layer 4a:            Layer 4b: Routing decision (LLM)
+LLM Answer            Match query to SME exclusions/topics?
+generation            ↓
++ citations         ┌─┴──────────┐
+    ↓               │            │
+Return answer    SME owner    No owner
++ source        identified   identified
+                    ↓            ↓
+                Return         Return
+                sme_redirect   admin_fallback
+                    ↓            ↓
+                (log to query_logs — CI-2)
+```
+
+#### 5.3.3 Admin Approval Flow
+
+```
+SME approves entry (Tier 1)
+    Status: draft → pending_review
+    ↓
+Entry appears in Admin queue
+    ↓
+Admin reviews:
+  - Topic alignment correct?
+  - Answer accurate and appropriate?
+  - exposable_to_users flag correct?
+    ↓
+    ┌────────┴────────┐
+  Publish          Send back / Reject
+    ↓                  ↓
+Status:            Status:
+pending_review    pending_review →
+   → approved        draft (back to SME)
+    ↓                  ↓
+Embedding         SME re-edits
+generated +       and resubmits
+stored
+    ↓
+Entry visible to user query
+    ↓
+(Logged in approved_by_sme_id, approved_at)
 ```
 
 ### 5.4 Data Model
