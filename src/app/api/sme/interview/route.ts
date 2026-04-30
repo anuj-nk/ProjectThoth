@@ -4,11 +4,10 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { conductInterview, synthesizeKBEntry, generateEmbedding } from '@/lib/claude'
-import { interviewApi, kbApi } from '@/lib/supabase'
+import { conductInterview, synthesizeKBEntries } from '@/lib/claude'
+import { interviewApi, kbApi, transcriptApi } from '@/lib/supabase'
 import type { InterviewMessage } from '@/types'
 
-// POST /api/sme/interview - Send a message in the interview
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -23,23 +22,26 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      // Create interview record
-      const interview = await interviewApi.create(sme_id, topic)
+      const session = await interviewApi.create(sme_id)
 
       // Get first question from Claude
       const firstMessage = await conductInterview([], '')
 
-      // Save first message
       const messages: InterviewMessage[] = [{
         role: 'assistant',
         content: firstMessage,
         timestamp: new Date().toISOString()
       }]
 
-      await interviewApi.update(interview.id, { messages })
+      // Store topic in draft_profile; move to active stage
+      await interviewApi.update(session.session_id, {
+        draft_profile: { topic },
+        stage: 'interview_active',
+        message_history: messages
+      })
 
       return NextResponse.json({
-        interview_id: interview.id,
+        interview_id: session.session_id,
         message: firstMessage,
         status: 'in_progress'
       })
@@ -54,14 +56,13 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      const interview = await interviewApi.getById(interview_id)
-      if (!interview) {
+      const session = await interviewApi.getById(interview_id)
+      if (!session) {
         return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
       }
 
-      // Add SME message to history
       const updatedMessages: InterviewMessage[] = [
-        ...interview.messages,
+        ...(session.message_history || []),
         {
           role: 'sme',
           content: message,
@@ -69,10 +70,8 @@ export async function POST(req: NextRequest) {
         }
       ]
 
-      // Get Claude's next response
       const assistantResponse = await conductInterview(updatedMessages, message)
 
-      // Check if interview is complete
       const isComplete = assistantResponse.toLowerCase().includes('let me prepare a summary')
         || assistantResponse.toLowerCase().includes('solid understanding')
 
@@ -86,9 +85,8 @@ export async function POST(req: NextRequest) {
       ]
 
       await interviewApi.update(interview_id, {
-        messages: finalMessages,
-        status: isComplete ? 'completed' : 'in_progress',
-        ...(isComplete && { completed_at: new Date().toISOString() })
+        message_history: finalMessages,
+        stage: isComplete ? 'synthesis_review' : 'interview_active'
       })
 
       return NextResponse.json({
@@ -98,7 +96,7 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // --- Synthesize and create KB draft ---
+    // --- Synthesize and create KB drafts ---
     if (action === 'synthesize') {
       if (!interview_id || !sme_id) {
         return NextResponse.json(
@@ -107,36 +105,48 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      const interview = await interviewApi.getById(interview_id)
-      if (!interview) {
+      const session = await interviewApi.getById(interview_id)
+      if (!session) {
         return NextResponse.json({ error: 'Interview not found' }, { status: 404 })
       }
 
-      // Synthesize with Claude
-      const synthesis = await synthesizeKBEntry(interview.messages, interview.topic)
+      const topic: string = session.draft_profile?.topic || 'General Knowledge'
+      const messageHistory: InterviewMessage[] = session.message_history || []
 
-      // Create KB entry as draft
-      const kbEntry = await kbApi.create({
-        sme_id,
-        topic: synthesis.topic,
-        subtopic: synthesis.subtopic,
-        title: synthesis.title,
-        content: synthesis.content,
-        raw_transcript: JSON.stringify(interview.messages), // stored but never shown to users
-        status: 'pending_sme',                              // waiting for SME approval
-        visibility: synthesis.visibility as 'internal' | 'user_visible',
-        keywords: synthesis.keywords,
-        confidence_hint: synthesis.confidence_hint,
-        review_date: getReviewDate(synthesis.review_cadence)
+      // Save raw transcript (never exposed to end users)
+      const transcript = await transcriptApi.create(sme_id, interview_id, messageHistory)
+
+      // Synthesize — returns array of 4-6 entries
+      const synthesized = await synthesizeKBEntries(messageHistory, topic)
+
+      // Create each KB entry as a draft
+      const createdEntries = await Promise.all(
+        synthesized.map(entry =>
+          kbApi.create({
+            sme_id,
+            topic_tag: entry.topic_tag,
+            question_framing: entry.question_framing,
+            synthesized_answer: entry.synthesized_answer,
+            exposable_to_users: entry.exposable_to_users,
+            raw_transcript_id: transcript.transcript_id,
+            status: 'draft'
+          })
+        )
+      )
+
+      // Update session: mark completed, store entry refs
+      await interviewApi.update(interview_id, {
+        stage: 'completed',
+        draft_entries: createdEntries.map(e => ({
+          entry_id: e.entry_id,
+          topic_tag: e.topic_tag
+        }))
       })
 
-      // Link KB entry to interview
-      await interviewApi.update(interview_id, { kb_entry_id: kbEntry.id })
-
       return NextResponse.json({
-        kb_entry: kbEntry,
-        synthesis,
-        message: 'Knowledge entry synthesized. Please review and approve.'
+        kb_entries: createdEntries,
+        count: createdEntries.length,
+        message: 'Knowledge entries synthesized. Please review and approve each entry.'
       })
     }
 
@@ -149,17 +159,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     )
   }
-}
-
-// Helper: calculate review date based on cadence
-function getReviewDate(cadence: string): string {
-  const date = new Date()
-  switch (cadence) {
-    case 'monthly':    date.setMonth(date.getMonth() + 1); break
-    case 'quarterly':  date.setMonth(date.getMonth() + 3); break
-    case 'biannual':   date.setMonth(date.getMonth() + 6); break
-    case 'annual':     date.setFullYear(date.getFullYear() + 1); break
-    default:           date.setMonth(date.getMonth() + 6)
-  }
-  return date.toISOString().split('T')[0]
 }

@@ -10,7 +10,7 @@ import { generateEmbedding } from '@/lib/claude'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { action, kb_entry_id, approved_by, edits } = body
+    const { action, kb_entry_id, sme_id, approved_by, edits } = body
 
     if (!kb_entry_id || !action) {
       return NextResponse.json(
@@ -19,72 +19,60 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // --- SME approves their own entry ---
+    // --- SME approves their own entry → pending_review ---
     if (action === 'sme_approve') {
-      const entry = await kbApi.update(kb_entry_id, {
-        status: 'pending_admin',
-        ...(edits && { content: edits.content, keywords: edits.keywords })
-      })
+      if (!sme_id) {
+        return NextResponse.json({ error: 'sme_id required for sme_approve' }, { status: 400 })
+      }
 
-      return NextResponse.json({
-        entry,
-        message: 'Entry submitted for admin review.'
-      })
+      await kbApi.smeApprove(kb_entry_id, sme_id)
+
+      if (edits?.synthesized_answer) {
+        await kbApi.update(kb_entry_id, { synthesized_answer: edits.synthesized_answer })
+      }
+
+      const entry = await kbApi.getById(kb_entry_id)
+      return NextResponse.json({ entry, message: 'Entry submitted for admin review.' })
     }
 
-    // --- SME requests changes (sends back to draft) ---
+    // --- SME sends entry back to draft ---
     if (action === 'sme_reject') {
-      const entry = await kbApi.update(kb_entry_id, {
-        status: 'draft',
-        ...(edits && { content: edits.content })
-      })
-
-      return NextResponse.json({
-        entry,
-        message: 'Entry returned to draft for revision.'
-      })
+      const updates: Record<string, any> = { status: 'draft' }
+      if (edits?.synthesized_answer) updates.synthesized_answer = edits.synthesized_answer
+      const entry = await kbApi.update(kb_entry_id, updates)
+      return NextResponse.json({ entry, message: 'Entry returned to draft for revision.' })
     }
 
-    // --- Admin approves and publishes to KB ---
+    // --- Admin publishes entry → approved + embedding ---
     if (action === 'admin_approve') {
       if (!approved_by) {
         return NextResponse.json({ error: 'approved_by required' }, { status: 400 })
       }
 
-      // Get the entry to generate embedding
-      const entries = await kbApi.getPendingAdmin()
-      const entry = entries.find(e => e.id === kb_entry_id)
-
-      if (!entry) {
-        return NextResponse.json({ error: 'Entry not found or not pending' }, { status: 404 })
+      const entry = await kbApi.getById(kb_entry_id)
+      if (!entry || entry.status !== 'pending_review') {
+        return NextResponse.json(
+          { error: 'Entry not found or not pending review' },
+          { status: 404 }
+        )
       }
 
-      // Generate embedding from title + content
-      const textToEmbed = `${entry.title}\n\n${entry.content}\n\nKeywords: ${entry.keywords.join(', ')}`
+      // Embed question_framing + synthesized_answer at publish time (per PRD)
+      const textToEmbed = `${entry.question_framing}\n\n${entry.synthesized_answer}`
       const embedding = await generateEmbedding(textToEmbed)
-
-      // Store embedding
       await kbApi.storeEmbedding(kb_entry_id, embedding)
 
-      // Approve entry
-      const approvedEntry = await kbApi.approve(kb_entry_id, approved_by)
-
+      const approvedEntry = await kbApi.publish(kb_entry_id, approved_by)
       return NextResponse.json({
         entry: approvedEntry,
         message: 'Entry approved and published to knowledge base.'
       })
     }
 
-    // --- Admin rejects ---
+    // --- Admin rejects entry ---
     if (action === 'admin_reject') {
-      const entry = await kbApi.update(kb_entry_id, {
-        status: 'pending_sme'
-      })
-
-      return NextResponse.json({
-        entry,
-        message: 'Entry returned to SME for revision.'
-      })
+      const entry = await kbApi.reject(kb_entry_id)
+      return NextResponse.json({ entry, message: 'Entry rejected.' })
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
@@ -98,13 +86,13 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET pending entries (for admin dashboard)
+// GET pending entries (for admin dashboard and SME review)
 export async function GET(req: NextRequest) {
   try {
     const status = req.nextUrl.searchParams.get('status')
     const sme_id = req.nextUrl.searchParams.get('sme_id')
 
-    if (status === 'pending_admin') {
+    if (status === 'pending_review') {
       const entries = await kbApi.getPendingAdmin()
       return NextResponse.json({ entries })
     }

@@ -54,7 +54,7 @@ export default function UserChat({ sessionId }: { sessionId: string }) {
           action: result.action,
           routed_sme: result.routed_sme,
           confidence: result.confidence_score,
-          sources: result.sources?.map(s => s.title)
+          sources: result.sources?.map(s => s.topic_tag)
         }
       }
 
@@ -135,8 +135,8 @@ function MessageBubble({ message }: { message: ChatMessage }) {
         {sme && (
           <div className="mt-2 border border-[#e20074]/30 rounded-xl p-3 bg-[#e20074]/5">
             <p className="text-white/50 text-xs uppercase tracking-widest mb-1">Routed to SME</p>
-            <p className="text-white font-medium text-sm">{sme.name}</p>
-            <p className="text-white/50 text-xs">{sme.role}</p>
+            <p className="text-white font-medium text-sm">{sme.full_name}</p>
+            <p className="text-white/50 text-xs">{sme.title}</p>
             <a
               href={`mailto:${sme.email}`}
               className="text-[#e20074] text-xs hover:underline mt-1 inline-block"
@@ -200,7 +200,7 @@ function formatResponse(result: QueryResult): string {
     case 'clarified':
       return result.clarifying_question || 'Could you provide more details?'
     case 'routed_sme':
-      const smeName = result.routed_sme?.name || 'the appropriate expert'
+      const smeName = result.routed_sme?.full_name || 'the appropriate expert'
       return `I don't have enough information in the knowledge base to answer this directly. I'm connecting you with ${smeName}, who owns this area.`
     case 'routed_admin':
       return "This question falls outside our current knowledge base coverage. I'm routing you to a system administrator who can help or ensure this knowledge gets captured."
