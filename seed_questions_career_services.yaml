@@ -1,0 +1,212 @@
+# Thoth Seed Question Library
+# Domain: Career Services (Patrick Chidsey as reference SME)
+# Version: 0.2  (2026-04-30)
+# Maintainer: SME Journey owner
+#
+# CHANGELOG
+#   v0.2: added `topic_coverage` field on each question — list of taxonomy
+#         topic_ids that the question is meant to surface. Used by
+#         `langgraph_sme_intake.py` (interview_node) to track coverage and
+#         pick the next question from gaps. All values must exist in
+#         `topic_taxonomy.yaml`. The legacy free-text `targets` field is
+#         kept for human readability and orchestration heuristics.
+#   v0.1: initial library.
+#
+# How this is used:
+#   After an SME's profile is confirmed, Thoth loads the matching domain
+#   library. The LLM picks 1-2 opening questions, then chooses follow-ups
+#   based on coverage gaps and dynamic LLM-generated probes. Not every
+#   question gets asked.
+#
+# Design principles:
+#   1. Surface TACIT knowledge — the stuff not in any doc.
+#   2. Probe BOUNDARIES — what's NOT this SME's area.
+#   3. Request EVIDENCE — files, templates, examples.
+#   4. Open-ended — no yes/no.
+
+domain: career_services
+domain_label: "Career Services & Industry Engagement"
+reference_sme: "Patrick Chidsey (Assistant Director, Career Services & Industry Engagement)"
+
+# ────────────────────────────────────────────────────────────
+# OPENING QUESTIONS — interview starters (LLM picks 1-2)
+# ────────────────────────────────────────────────────────────
+
+opening_questions:
+  - id: op_01
+    question: "Walk me through what happens from the moment a student receives an internship offer to their first day of work. What are the steps students often miss or get wrong?"
+    targets: [process_knowledge, common_mistakes]
+    topic_coverage: [internship, cpt, techin_601]
+
+  - id: op_02
+    question: "What are the top 3 questions students ask you every quarter that you wish they'd find the answer to themselves?"
+    targets: [faq_discovery, high_volume_topics]
+    topic_coverage: []                       # broad — no specific topics
+
+  - id: op_03
+    question: "If a new MSTI student came to you in week 1 and asked 'what do I need to know about internships at GIX,' what would you tell them in 5 minutes?"
+    targets: [scope_overview, priority_topics]
+    topic_coverage: [internship, internship_search]
+
+  - id: op_04
+    question: "Describe a recent student case that was complicated — one where the answer wasn't obvious. What made it tricky?"
+    targets: [edge_cases, decision_heuristics]
+    topic_coverage: [cpt, offer_negotiation]
+
+# ────────────────────────────────────────────────────────────
+# TACIT KNOWLEDGE PROBES — surface SME-only knowledge
+# ────────────────────────────────────────────────────────────
+
+tacit_knowledge_probes:
+  - id: tk_01
+    question: "What's a mistake you've seen students make with CPT or internships that's NOT written down in any official UW or GIX document?"
+    targets: [undocumented_warnings, anti_patterns]
+    topic_coverage: [cpt, internship]
+
+  - id: tk_02
+    question: "If a student comes to you 2 weeks before their internship start date having done nothing — no TECHIN 601 registration, no CPT application, no I-20 update — what's your triage?"
+    targets: [crisis_playbook, escalation_steps]
+    topic_coverage: [cpt, techin_601, i20]
+
+  - id: tk_03
+    question: "What's the difference between a student who'll land a great internship and one who struggles? What do you tell the ones who are struggling?"
+    targets: [coaching_patterns, soft_skills]
+    topic_coverage: [career_coaching, internship_search]
+
+  - id: tk_04
+    question: "Are there any companies on the 'employers' list where the hiring process has a weird quirk — timeline, interview style, visa handling — that students should know about?"
+    targets: [employer_intelligence, hidden_knowledge]
+    topic_coverage: [industry_networking, internship_search]
+
+  - id: tk_05
+    question: "When a student's offer comes with something unusual — signing bonus, relocation, equity, unpaid internship structure — what do you tell them to watch out for?"
+    targets: [offer_negotiation, red_flags]
+    topic_coverage: [offer_negotiation]
+
+# ────────────────────────────────────────────────────────────
+# BOUNDARY PROBES — clarify what this SME does NOT own
+# ────────────────────────────────────────────────────────────
+
+boundary_probes:
+  - id: bd_01
+    question: "When a student asks you about their F-1 visa status, OPT eligibility, or travel restrictions, where do you send them and why?"
+    targets: [visa_boundary, iss_routing]
+    topic_coverage: [visa, opt, i20]
+
+  - id: bd_02
+    question: "What career-related questions do you get that you think actually belong to someone else at GIX? Who owns them?"
+    targets: [cross_sme_overlap, routing_map]
+    topic_coverage: []
+
+  - id: bd_03
+    question: "What's the line between 'career coaching' (your area) and 'academic advising' (Kara/Jason's area)? Where does it get blurry for students?"
+    targets: [peer_sme_distinction, overlap_handling]
+    topic_coverage: [career_coaching, course_petitions]
+
+  - id: bd_04
+    question: "For students thinking about entrepreneurship, venture work, or starting something themselves — do you help with that, or does that go elsewhere?"
+    targets: [scope_edge, alternative_paths]
+    topic_coverage: []
+
+# ────────────────────────────────────────────────────────────
+# EVIDENCE PROBES — trigger document uploads
+# ────────────────────────────────────────────────────────────
+
+evidence_probes:
+  - id: ev_01
+    question: "Do you have a document, checklist, or email template you send when a student accepts an internship offer? Can you upload it?"
+    expected_artifact: "Internship acceptance checklist / onboarding email template"
+    targets: [template_capture]
+    topic_coverage: [offer_negotiation, internship]
+
+  - id: ev_02
+    question: "Is there a one-pager or slide deck you use for career workshops, resume reviews, or orientation? Upload any version you have."
+    expected_artifact: "Workshop materials / presentation decks"
+    targets: [training_material_capture]
+    topic_coverage: [career_coaching]
+
+  - id: ev_03
+    question: "When you send students to external resources (Handshake, LinkedIn Learning, specific job boards), do you have a curated list somewhere? Share it."
+    expected_artifact: "Curated resource list / link collection"
+    targets: [external_resource_capture]
+    topic_coverage: [industry_networking, internship_search]
+
+  - id: ev_04
+    question: "For TECHIN 601 specifically — is there a syllabus, FAQ, or student guide I should reference? Upload it."
+    expected_artifact: "TECHIN 601 syllabus / student guide"
+    targets: [course_documentation]
+    topic_coverage: [techin_601]
+
+# ────────────────────────────────────────────────────────────
+# EXPOSURE POLICY PROBES — direct-answer vs always-route
+# ────────────────────────────────────────────────────────────
+
+exposure_policy_probes:
+  - id: ex_01
+    question: "For each topic we've discussed, which ones are OK for Thoth to answer directly, and which ones should ALWAYS route to you — even if you've already explained it?"
+    targets: [exposure_rules, routing_override]
+    topic_coverage: []
+    example_prompt: |
+      For example, "TECHIN 601 fee = $59/credit" might be OK to share directly.
+      But "can I get a fee waiver?" might always need to come to you because
+      it's case-by-case.
+
+  - id: ex_02
+    question: "Are there topics where the answer depends on the specific student — immigration status, academic standing, financial situation — and Thoth should NEVER try to answer directly?"
+    targets: [individual_context_required, hard_route_cases]
+    topic_coverage: [fee_waiver]
+
+  - id: ex_03
+    question: "Are any of the documents you uploaded internal-only, and should NOT be shown or cited to students?"
+    targets: [document_visibility_rules]
+    topic_coverage: []
+
+# ────────────────────────────────────────────────────────────
+# MAINTENANCE PROBES — set up review/refresh cycle
+# ────────────────────────────────────────────────────────────
+
+maintenance_probes:
+  - id: mt_01
+    question: "How often does the information in your area change — monthly, quarterly, once a year? This helps Thoth know when to ask you to review entries."
+    targets: [review_cadence]
+    topic_coverage: []
+
+  - id: mt_02
+    question: "Are there predictable 'refresh moments' — start of each quarter, annual policy updates, new intake cohort — where we should automatically prompt you to update this?"
+    targets: [scheduled_refresh_triggers]
+    topic_coverage: []
+
+# ────────────────────────────────────────────────────────────
+# CLOSING — wrap, transition to synthesis
+# ────────────────────────────────────────────────────────────
+
+closing:
+  - id: cl_01
+    question: "Anything I didn't ask that you think students at GIX really need to know about career services — something you find yourself saying over and over?"
+    targets: [gap_catch, missed_topics]
+    topic_coverage: []
+
+  - id: cl_02
+    question: "I'm going to synthesize what you've told me into about 4-6 knowledge entries, each with a question and an answer. You'll review each one before anything goes live. Ready for me to start?"
+    targets: [transition_to_synthesis]
+    topic_coverage: []
+    type: confirmation
+
+# ────────────────────────────────────────────────────────────
+# USAGE NOTES FOR THE LLM ORCHESTRATOR
+# ────────────────────────────────────────────────────────────
+
+orchestration_notes: |
+  - Start with ONE opening question (not all). Let the SME talk freely.
+  - After each answer, decide: (a) ask a follow-up LLM-generated question
+    to go deeper, (b) pick the next seed question whose `topic_coverage`
+    isn't yet covered, or (c) move on if the topic feels saturated.
+  - Aim for 10-15 total exchanges. More than 20 = interview fatigue.
+  - Always include at least 1 boundary probe and 1 evidence probe.
+  - If SME uploads a document, briefly read it and ask a gap-filling
+    question ("the doc says X, but what happens when Y?").
+  - End with exposure_policy_probes and maintenance_probes — they shape
+    what Thoth does AFTER the interview, so they matter most.
+  - Coverage tracking: `interview_node` aggregates `topic_coverage` ids
+    across asked questions and stops when the SME's primary topics are
+    saturated OR after 15 turns, whichever comes first.
