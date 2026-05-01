@@ -3,7 +3,6 @@
 // ============================================
 
 import { createClient } from '@supabase/supabase-js'
-import type { SMEProfile, KBEntry, Document, Interview, QueryLog, RoutingRule } from '@/types'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -20,8 +19,17 @@ export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 // ============================================
 
 export const smeApi = {
-  // Create a new SME profile
-  async create(profile: Omit<SMEProfile, 'id' | 'created_at' | 'updated_at'>): Promise<SMEProfile> {
+  async create(profile: {
+    full_name: string
+    email: string
+    title?: string
+    domain: string
+    topics?: any[]
+    exclusions?: any[]
+    routing_preferences?: any[]
+    availability?: string
+    profile_source_input?: string
+  }) {
     const { data, error } = await supabaseAdmin
       .from('sme_profiles')
       .insert(profile)
@@ -31,71 +39,71 @@ export const smeApi = {
     return data
   },
 
-  // Get SME by email (used for "login")
-  async getByEmail(email: string): Promise<SMEProfile | null> {
+  async getByEmail(email: string) {
     const { data, error } = await supabaseAdmin
       .from('sme_profiles')
       .select('*')
       .eq('email', email)
-      .eq('is_active', true)
       .single()
     if (error) return null
     return data
   },
 
-  // Get SME by ID
-  async getById(id: string): Promise<SMEProfile | null> {
+  async getById(sme_id: string) {
     const { data, error } = await supabaseAdmin
       .from('sme_profiles')
       .select('*')
-      .eq('id', id)
+      .eq('sme_id', sme_id)
       .single()
     if (error) return null
     return data
   },
 
-  // Get all active SMEs
-  async getAll(): Promise<SMEProfile[]> {
+  async getAll() {
     const { data, error } = await supabaseAdmin
       .from('sme_profiles')
       .select('*')
-      .eq('is_active', true)
-      .order('name')
+      .order('full_name')
     if (error) throw error
     return data || []
   },
 
-  // Update SME profile
-  async update(id: string, updates: Partial<SMEProfile>): Promise<SMEProfile> {
+  async update(sme_id: string, updates: Record<string, any>) {
     const { data, error } = await supabaseAdmin
       .from('sme_profiles')
       .update(updates)
-      .eq('id', id)
+      .eq('sme_id', sme_id)
       .select()
       .single()
     if (error) throw error
     return data
   },
 
-  // Find SMEs by topic (for routing)
-  async findByTopic(topic: string): Promise<SMEProfile[]> {
+  async findByTopic(topic: string) {
     const { data, error } = await supabaseAdmin
       .from('sme_profiles')
       .select('*')
-      .eq('is_active', true)
-      .contains('topics_owned', [topic])
+      .contains('topics', [topic])
     if (error) throw error
     return data || []
   }
 }
 
 // ============================================
-// KB ENTRY OPERATIONS
+// KNOWLEDGE ENTRY OPERATIONS
 // ============================================
 
 export const kbApi = {
-  // Create a draft KB entry
-  async create(entry: Omit<KBEntry, 'id' | 'created_at' | 'updated_at' | 'embedding' | 'sme' | 'documents'>): Promise<KBEntry> {
+  async create(entry: {
+    sme_id: string
+    topic_tag: string
+    question_framing: string
+    synthesized_answer: string
+    supporting_doc_ids?: any[]
+    exposable_to_users?: boolean
+    raw_transcript_id?: string
+    status?: string
+  }) {
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
       .insert(entry)
@@ -105,68 +113,86 @@ export const kbApi = {
     return data
   },
 
-  // Update a KB entry (used for approval workflow)
-  async update(id: string, updates: Partial<KBEntry>): Promise<KBEntry> {
+  async update(entry_id: string, updates: Record<string, any>) {
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
       .update(updates)
-      .eq('id', id)
+      .eq('entry_id', entry_id)
       .select()
       .single()
     if (error) throw error
     return data
   },
 
-  // Store embedding for a KB entry
-  async storeEmbedding(id: string, embedding: number[]): Promise<void> {
+  async getById(entry_id: string) {
+    const { data, error } = await supabaseAdmin
+      .from('knowledge_entries')
+      .select('*, sme_profiles(*)')
+      .eq('entry_id', entry_id)
+      .single()
+    if (error) return null
+    return data
+  },
+
+  async storeEmbedding(entry_id: string, embedding: number[]) {
     const { error } = await supabaseAdmin
       .from('knowledge_entries')
-      .update({ embedding: JSON.stringify(embedding) })
-      .eq('id', id)
+      .update({ embedding })
+      .eq('entry_id', entry_id)
     if (error) throw error
   },
 
-  // Get entries by SME (for SME dashboard)
-  async getBySME(sme_id: string): Promise<KBEntry[]> {
+  async getBySME(sme_id: string) {
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
-      .select('*, sme:sme_profiles(*), documents(*)')
+      .select('*')
       .eq('sme_id', sme_id)
       .order('created_at', { ascending: false })
     if (error) throw error
     return data || []
   },
 
-  // Get entries pending admin approval
-  async getPendingAdmin(): Promise<KBEntry[]> {
+  // Entries SME-approved, awaiting admin publish
+  async getPendingAdmin() {
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
-      .select('*, sme:sme_profiles(*)')
-      .eq('status', 'pending_admin')
+      .select('*, sme_profiles(*)')
+      .eq('status', 'pending_review')
       .order('created_at', { ascending: false })
     if (error) throw error
     return data || []
   },
 
-  // Approve an entry (admin action)
-  async approve(id: string, approved_by: string): Promise<KBEntry> {
-    const review_date = new Date()
-    review_date.setMonth(review_date.getMonth() + 6) // 6 month review cycle
+  // Admin publishes entry — triggers embedding generation
+  async publish(entry_id: string, approved_by_sme_id: string) {
+    const next_review_due = new Date()
+    next_review_due.setMonth(next_review_due.getMonth() + 6)
 
-    return kbApi.update(id, {
+    return kbApi.update(entry_id, {
       status: 'approved',
-      approved_by,
-      reviewed_at: new Date().toISOString(),
-      review_date: review_date.toISOString().split('T')[0]
+      approved_by_sme_id,
+      approved_at: new Date().toISOString(),
+      next_review_due: next_review_due.toISOString()
     })
   },
 
-  // Semantic search using pgvector
+  async reject(entry_id: string) {
+    return kbApi.update(entry_id, { status: 'rejected' })
+  },
+
+  // SME approves draft — moves to pending_review
+  async smeApprove(entry_id: string, sme_id: string) {
+    return kbApi.update(entry_id, {
+      status: 'pending_review',
+      approved_by_sme_id: sme_id
+    })
+  },
+
   async semanticSearch(
     embedding: number[],
     threshold: number = 0.75,
     limit: number = 5
-  ): Promise<(KBEntry & { similarity: number })[]> {
+  ) {
     const { data, error } = await supabaseAdmin.rpc('match_kb_entries', {
       query_embedding: embedding,
       match_threshold: threshold,
@@ -176,50 +202,32 @@ export const kbApi = {
     return data || []
   },
 
-  // Get entries due for review
-  async getDueForReview(): Promise<KBEntry[]> {
-    const today = new Date().toISOString().split('T')[0]
+  async getDueForReview() {
+    const today = new Date().toISOString()
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
-      .select('*, sme:sme_profiles(*)')
+      .select('*, sme_profiles(*)')
       .eq('status', 'approved')
-      .lte('review_date', today)
-      .order('review_date')
+      .lte('next_review_due', today)
+      .order('next_review_due')
     if (error) throw error
     return data || []
   }
 }
 
 // ============================================
-// DOCUMENT OPERATIONS
+// INTERVIEW SESSION OPERATIONS
 // ============================================
 
-export const documentApi = {
-  // Upload a file to Supabase Storage and record it
-  async upload(
-    file: File,
-    sme_id: string,
-    kb_entry_id?: string,
-    visibility: 'internal' | 'user_visible' = 'internal'
-  ): Promise<Document> {
-    const fileName = `${sme_id}/${Date.now()}_${file.name}`
-
-    // Upload to Supabase Storage
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('thoth-documents')
-      .upload(fileName, file)
-    if (uploadError) throw uploadError
-
-    // Record in documents table
+export const interviewApi = {
+  async create(sme_id: string) {
     const { data, error } = await supabaseAdmin
-      .from('documents')
+      .from('interview_sessions')
       .insert({
-        kb_entry_id,
         sme_id,
-        file_name: file.name,
-        file_type: file.name.split('.').pop() || 'unknown',
-        storage_path: fileName,
-        visibility
+        stage: 'input_received',
+        message_history: [],
+        draft_entries: []
       })
       .select()
       .single()
@@ -227,79 +235,60 @@ export const documentApi = {
     return data
   },
 
-  // Get signed URL for a document
-  async getUrl(storage_path: string): Promise<string> {
-    const { data, error } = await supabaseAdmin.storage
-      .from('thoth-documents')
-      .createSignedUrl(storage_path, 3600) // 1 hour
-    if (error) throw error
-    return data.signedUrl
-  }
-}
-
-// ============================================
-// INTERVIEW OPERATIONS
-// ============================================
-
-export const interviewApi = {
-  async create(sme_id: string, topic: string): Promise<Interview> {
+  async update(session_id: string, updates: Record<string, any>) {
     const { data, error } = await supabaseAdmin
       .from('interview_sessions')
-      .insert({ sme_id, topic, messages: [], status: 'in_progress' })
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('session_id', session_id)
       .select()
       .single()
     if (error) throw error
     return data
   },
 
-  async update(id: string, updates: Partial<Interview>): Promise<Interview> {
-    const { data, error } = await supabaseAdmin
-      .from('interview_sessions')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single()
-    if (error) throw error
-    return data
-  },
-
-  async getById(id: string): Promise<Interview | null> {
+  async getById(session_id: string) {
     const { data, error } = await supabaseAdmin
       .from('interview_sessions')
       .select('*')
-      .eq('id', id)
+      .eq('session_id', session_id)
       .single()
     if (error) return null
     return data
+  },
+
+  async getBySME(sme_id: string) {
+    const { data, error } = await supabaseAdmin
+      .from('interview_sessions')
+      .select('*')
+      .eq('sme_id', sme_id)
+      .order('updated_at', { ascending: false })
+    if (error) throw error
+    return data || []
   }
 }
 
 // ============================================
-// QUERY LOG OPERATIONS
+// RAW TRANSCRIPT OPERATIONS
 // ============================================
 
-export const queryLogApi = {
-  async log(entry: Omit<QueryLog, 'id' | 'asked_at'>): Promise<void> {
-    await supabaseAdmin.from('query_logs').insert(entry)
+export const transcriptApi = {
+  async create(sme_id: string, session_id: string, messages: any[]) {
+    const { data, error } = await supabaseAdmin
+      .from('raw_transcripts')
+      .insert({ sme_id, session_id, messages })
+      .select()
+      .single()
+    if (error) throw error
+    return data
   },
 
-  async getStats(): Promise<{
-    total: number
-    answered: number
-    routed: number
-    avg_confidence: number
-  }> {
+  async getById(transcript_id: string) {
     const { data, error } = await supabaseAdmin
-      .from('query_logs')
-      .select('action_taken, confidence_score')
-    if (error) throw error
-
-    const logs = data || []
-    return {
-      total: logs.length,
-      answered: logs.filter(l => l.action_taken === 'answered').length,
-      routed: logs.filter(l => l.action_taken.startsWith('routed')).length,
-      avg_confidence: logs.reduce((sum, l) => sum + (l.confidence_score || 0), 0) / (logs.length || 1)
-    }
+      .from('raw_transcripts')
+      .select('*')
+      .eq('transcript_id', transcript_id)
+      .single()
+    if (error) return null
+    return data
   }
 }

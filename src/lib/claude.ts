@@ -1,32 +1,149 @@
 // ============================================
-// PROJECT THOTH - OpenRouter LLM Client
+// PROJECT THOTH - LLM Client
+// Provider order: OpenRouter free → Groq fallback
 // ============================================
-
-import type { SMEProfile, KBEntry, QueryResult, InterviewMessage } from '@/types'
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
+const GROQ_API_KEY = process.env.GROQ_API_KEY
+const GROQ_BASE_URL = 'https://api.groq.com/openai/v1'
 
-// ============================================
-// FREE MODEL FALLBACK LIST
-// Tries each in order if one is rate-limited
-// ============================================
+// OpenRouter free models — tried in order
 const FREE_MODELS = [
   'google/gemma-4-31b-it:free',
   'google/gemma-3-27b-it:free',
   'meta-llama/llama-3.3-70b-instruct:free',
-  'meta-llama/llama-3.2-3b-instruct:free',
-  'mistralai/mistral-7b-instruct:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+  'microsoft/phi-4:free',
+  'qwen/qwen3-8b:free',
   'google/gemma-3-12b-it:free',
   'openai/gpt-oss-20b:free',
 ]
 
-// Set to a paid model string for demo day, null = use free fallbacks
-// e.g. 'anthropic/claude-sonnet-4-5' or 'google/gemini-flash-1.5'
+// Groq models — fast reliable fallback
+const GROQ_MODELS = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant',
+  'mixtral-8x7b-32768',
+]
+
+// Set for demo day: 'anthropic/claude-sonnet-4-5' or 'google/gemini-flash-1.5'
+// null = use free fallbacks
 const PRODUCTION_MODEL: string | null = null
 
 // ============================================
-// CORE LLM CALLER WITH AUTO-FALLBACK
+// TYPES (matching actual DB schema)
+// ============================================
+export interface SMERow {
+  sme_id: string
+  full_name: string
+  email: string
+  title?: string
+  domain: string
+  topics: string[]
+  exclusions: string[]
+  routing_preferences: any[]
+  availability?: string
+}
+
+export interface KBRow {
+  entry_id: string
+  sme_id: string
+  topic_tag: string
+  question_framing: string
+  synthesized_answer: string
+  exposable_to_users: boolean
+  status: string
+  similarity?: number
+}
+
+export interface QueryResult {
+  action: 'answered' | 'clarified' | 'routed_sme' | 'routed_admin'
+  answer?: string
+  clarifying_question?: string
+  routed_sme?: SMERow
+  routed_smes?: SMERow[]
+  routing_reason?: string
+  kb_entries_used: string[]
+  confidence_score: number
+  sources?: { topic_tag: string; exposable_to_users: boolean }[]
+}
+
+export interface InterviewMessage {
+  role: 'sme' | 'assistant'
+  content: string
+  timestamp?: string
+}
+
+// ============================================
+// LOW-LEVEL CALLERS
+// ============================================
+async function callOpenRouterModel(
+  model: string,
+  systemPrompt: string,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  maxTokens: number
+): Promise<string> {
+  const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
+      'X-Title': 'Project Thoth'
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature: 0.3,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages]
+    })
+  })
+
+  if (response.status === 429) throw new Error('rate limited')
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+  const data = await response.json()
+  if (data.error) throw new Error(data.error.message)
+
+  const content = data.choices?.[0]?.message?.content || ''
+  if (!content) throw new Error('empty response')
+  return content
+}
+
+async function callGroqModel(
+  model: string,
+  systemPrompt: string,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  maxTokens: number
+): Promise<string> {
+  const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${GROQ_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      temperature: 0.3,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages]
+    })
+  })
+
+  if (response.status === 429) throw new Error('rate limited')
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+  const data = await response.json()
+  if (data.error) throw new Error(data.error.message)
+
+  const content = data.choices?.[0]?.message?.content || ''
+  if (!content) throw new Error('empty response')
+  return content
+}
+
+// ============================================
+// CORE CALLER: OpenRouter → Groq fallback
 // ============================================
 async function callLLM(
   systemPrompt: string,
@@ -34,68 +151,41 @@ async function callLLM(
   maxTokens: number = 800,
   preferredModel?: string
 ): Promise<string> {
-  const modelsToTry = PRODUCTION_MODEL
-    ? [PRODUCTION_MODEL]
-    : preferredModel
-      ? [preferredModel, ...FREE_MODELS.filter(m => m !== preferredModel)]
-      : FREE_MODELS
+  if (PRODUCTION_MODEL) {
+    return callOpenRouterModel(PRODUCTION_MODEL, systemPrompt, messages, maxTokens)
+  }
 
   const errors: string[] = []
+  const openRouterModels = preferredModel
+    ? [preferredModel, ...FREE_MODELS.filter(m => m !== preferredModel)]
+    : FREE_MODELS
 
-  for (const model of modelsToTry) {
+  // Try OpenRouter free models
+  for (const model of openRouterModels) {
     try {
-      console.log(`[Thoth] Trying: ${model}`)
-
-      const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-          'X-Title': 'Project Thoth'
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          temperature: 0.3,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            ...messages
-          ]
-        })
-      })
-
-      if (response.status === 429) {
-        errors.push(`${model}: rate limited`)
-        console.log(`[Thoth] ${model} rate limited, trying next...`)
-        continue
-      }
-
-      if (!response.ok) {
-        const errText = await response.text()
-        errors.push(`${model}: HTTP ${response.status}`)
-        continue
-      }
-
-      const data = await response.json()
-
-      if (data.error) {
-        errors.push(`${model}: ${data.error.message}`)
-        continue
-      }
-
-      const content = data.choices?.[0]?.message?.content || ''
-      if (!content) {
-        errors.push(`${model}: empty response`)
-        continue
-      }
-
-      console.log(`[Thoth] Success with: ${model}`)
-      return content
-
+      console.log(`[Thoth] Trying OpenRouter: ${model}`)
+      const result = await callOpenRouterModel(model, systemPrompt, messages, maxTokens)
+      console.log(`[Thoth] Success: ${model}`)
+      return result
     } catch (err: any) {
-      errors.push(`${model}: ${err.message}`)
+      errors.push(`OpenRouter/${model}: ${err.message}`)
       continue
+    }
+  }
+
+  // Fall back to Groq
+  if (GROQ_API_KEY) {
+    console.log('[Thoth] All OpenRouter models failed — falling back to Groq...')
+    for (const model of GROQ_MODELS) {
+      try {
+        console.log(`[Thoth] Trying Groq: ${model}`)
+        const result = await callGroqModel(model, systemPrompt, messages, maxTokens)
+        console.log(`[Thoth] Success (Groq): ${model}`)
+        return result
+      } catch (err: any) {
+        errors.push(`Groq/${model}: ${err.message}`)
+        continue
+      }
     }
   }
 
@@ -124,104 +214,160 @@ function parseJSON<T>(text: string, fallback: T): T {
 }
 
 // ============================================
-// PROMPT: SME INTERVIEW CONDUCTOR
+// PROMPT: SME PROFILE EXTRACTOR (A2)
 // ============================================
-const SME_INTERVIEW_SYSTEM_PROMPT = `You are Thoth, a knowledge capture assistant. Interview a Subject Matter Expert (SME) to capture their knowledge for an organizational knowledge base.
+export const PROFILE_EXTRACTION_SYSTEM_PROMPT = `You are a profile extraction assistant for Project Thoth.
 
-Ask ONE question at a time. Be conversational and concise.
+Given raw input text (URL, email signature, job description, or free text), extract a structured SME profile.
 
-PHASE 1 - SCOPE:
-- What topic are we capturing today?
-- What does this topic cover and what does it NOT cover?
-
-PHASE 2 - CORE KNOWLEDGE:
-- What are the 3-5 most important things people should know?
-- What do people most commonly misunderstand?
-- What questions do you get asked most often?
-
-PHASE 3 - ROUTING:
-- When should someone come to you vs. handle it themselves?
-- Who covers related topics outside your scope?
-
-PHASE 4 - WRAP UP:
-- Is there anything important I have not asked about?
-
-When all phases are done, say exactly: "I think I have a solid understanding. Let me prepare a summary for your review."
-
-Start by greeting the SME and asking what topic they want to capture.`
-
-// ============================================
-// PROMPT: KB ENTRY SYNTHESIZER
-// ============================================
-const SYNTHESIS_SYSTEM_PROMPT = `You are a knowledge synthesis assistant. Given an interview transcript, create a structured knowledge base entry.
-
-Return ONLY a valid JSON object. No markdown, no explanation, no code blocks. Raw JSON only.
+Return ONLY valid JSON. No markdown, no prose, no code blocks.
 
 Required format:
 {
-  "title": "Short descriptive title",
-  "topic": "Main topic category",
-  "subtopic": "Sub-category or null",
-  "content": "3-4 paragraphs of organized knowledge. Include: what this covers, key facts, common questions answered, important boundaries.",
-  "keywords": ["5 to 10 relevant search terms"],
-  "confidence_hint": 0.9,
-  "review_cadence": "quarterly",
-  "routing_notes": "When to route to this SME vs handle directly",
-  "visibility": "internal"
+  "full_name": "string",
+  "email": "string or null",
+  "title": "string or null",
+  "domain": "one of: academics | career_services | facilities | prototyping_lab | admissions | it_purchasing | student_wellbeing | other",
+  "topics": ["array of specific topics this person owns"],
+  "exclusions": ["array of topics this person does NOT own"],
+  "routing_preferences": [{"channel": "teams|email|scheduling_link|in_person", "priority": 1}],
+  "availability": "free text availability notes or null",
+  "confidence_notes": {
+    "full_name": "high|medium|low",
+    "domain": "high|medium|low",
+    "topics": "high|medium|low",
+    "exclusions": "high|medium|low"
+  }
 }
 
 Rules:
-- content must be 200-500 words
-- Do NOT include the SME personal name in content
+- Use exact domain values listed above
+- If a field is uncertain, mark it low confidence — do NOT fabricate
+- topics should be specific (e.g. "CPT timeline" not just "visas")
+- exclusions are topics this person explicitly does NOT own`
+
+// ============================================
+// PROMPT: SME INTERVIEW CONDUCTOR (B2)
+// ============================================
+export const SME_INTERVIEW_SYSTEM_PROMPT = `You are Thoth, a knowledge capture assistant for an organizational knowledge base.
+
+Interview a Subject Matter Expert to capture their knowledge. Ask ONE question at a time. Be conversational, warm, and concise.
+
+PHASE 1 - OPENING (1-2 turns):
+Ask what topic they want to capture today, and confirm what it covers and does NOT cover.
+
+PHASE 2 - CORE KNOWLEDGE (4-6 turns):
+- What are the 3-5 most important things people should know?
+- What do people most commonly misunderstand or get wrong?
+- What questions do you get asked most often?
+- What tacit knowledge exists that is not written down anywhere?
+
+PHASE 3 - BOUNDARY PROBES (1-2 turns):
+- What is explicitly outside your scope?
+- Who should people go to for related topics you do not cover?
+
+PHASE 4 - EVIDENCE PROBES (1-2 turns):
+- Are there any documents, checklists, or resources that support this?
+- What would you point someone to first?
+
+PHASE 5 - EXPOSURE POLICY (1 turn):
+- Is there anything from this conversation that should NOT be shown directly to end users?
+
+PHASE 6 - WRAP UP (1 turn):
+- Is there anything important I have not asked about?
+
+When all phases are complete, say EXACTLY:
+"I think I have a solid understanding. Let me prepare a summary for your review."
+
+Start by greeting the SME and asking what topic they want to capture today.`
+
+// ============================================
+// PROMPT: KB ENTRY SYNTHESIZER (D1)
+// ============================================
+export const SYNTHESIS_SYSTEM_PROMPT = `You are a knowledge synthesis assistant for Project Thoth.
+
+Given an interview transcript, synthesize the content into 4-6 structured knowledge base entries.
+
+Return ONLY a valid JSON array. No markdown, no prose, no code blocks.
+
+Required format:
+[
+  {
+    "topic_tag": "snake_case_topic_label",
+    "question_framing": "The question this entry answers, written as a natural user question",
+    "synthesized_answer": "The answer in 2-4 clear sentences. Use the SME voice but rewrite for clarity.",
+    "exposable_to_users": true
+  }
+]
+
+Rules:
+- topic_tag must be snake_case (e.g. "cpt_timeline", "internship_eligibility")
+- question_framing should sound like a real user question
+- synthesized_answer must be 2-4 sentences — no padding, no filler
+- exposable_to_users: false if the SME flagged this topic as sensitive or internal-only
 - Do NOT fabricate anything not in the transcript
-- confidence_hint: 1.0 = very clear, 0.5 = vague
-- review_cadence: monthly, quarterly, biannual, or annual
-- visibility: internal or user_visible`
+- Cluster related points — avoid redundant entries
+- Do NOT include the SME's personal name in synthesized_answer`
 
 // ============================================
-// PROMPT: USER QUERY HANDLER
+// PROMPT: USER QUERY HANDLER (F6)
 // ============================================
-const buildQueryPrompt = (
-  kbResults: (KBEntry & { similarity: number })[],
-  allSMEs: SMEProfile[]
-) => `You are Thoth, a knowledge assistant. Answer questions using ONLY the knowledge base below.
+const buildQueryPrompt = (kbResults: KBRow[], allSMEs: SMERow[]) =>
+  `You are Thoth, a knowledge assistant. Answer questions using ONLY the knowledge base entries below.
 
-RULES:
-- KB has good answer (similarity > 0.7) -> action: "answered"
-- Question is vague -> action: "clarified", ask ONE follow-up question
-- KB empty but SME owns topic -> action: "routed_sme"
-- Completely unknown -> action: "routed_admin"
+ROUTING RULES:
+- KB entry found with good match (similarity > 0.7) AND exposable_to_users=true -> action: "answered"
+- Question is too vague to match -> action: "clarified", ask ONE follow-up question
+- No KB match but an SME owns this topic -> action: "routed_sme"
+- Completely outside known coverage -> action: "routed_admin"
 
 KNOWLEDGE BASE:
 ${kbResults.length > 0
-  ? kbResults.map((e, i) =>
-    `[${i + 1}] "${e.title}" (match: ${(e.similarity * 100).toFixed(0)}%)\nTopic: ${e.topic}\n${e.content}`
-  ).join('\n\n---\n\n')
-  : 'EMPTY - no relevant entries found.'}
+    ? kbResults.map((e, i) =>
+      `[${i + 1}] topic: "${e.topic_tag}" (match: ${((e.similarity || 0) * 100).toFixed(0)}%)
+Q: ${e.question_framing}
+A: ${e.synthesized_answer}
+exposable: ${e.exposable_to_users}`
+    ).join('\n\n---\n\n')
+    : 'EMPTY - no relevant entries found.'}
 
 AVAILABLE SMEs:
 ${allSMEs.length > 0
-  ? allSMEs.map(s =>
-    `- ${s.name} (${s.role}): topics=[${s.topics_owned.join(', ')}] email=${s.email}`
-  ).join('\n')
-  : 'No SMEs registered yet.'}
+    ? allSMEs.map(s =>
+      `- ${s.full_name} (${s.title || s.domain}): topics=[${(s.topics || []).join(', ')}] email=${s.email}`
+    ).join('\n')
+    : 'No SMEs registered yet.'}
 
 Return ONLY valid JSON, no markdown:
 {
   "action": "answered|clarified|routed_sme|routed_admin",
-  "answer": "Full answer (only if action=answered)",
-  "clarifying_question": "Your question (only if action=clarified)",
-  "routed_sme_email": "email (only if routing to one SME)",
-  "routed_sme_emails": ["email1","email2"],
+  "answer": "Full answer if action=answered",
+  "clarifying_question": "Your question if action=clarified",
+  "routed_sme_email": "email if routing to one SME",
+  "routed_sme_emails": ["email1", "email2"],
   "routing_reason": "Why you are routing",
   "confidence_score": 0.85,
-  "sources_used": ["title1"],
+  "sources_used": ["topic_tag1"],
   "kb_entry_ids": ["uuid1"]
 }`
 
 // ============================================
 // EXPORTED FUNCTIONS
 // ============================================
+
+export async function extractProfile(rawInput: string): Promise<any> {
+  const text = await callLLM(
+    PROFILE_EXTRACTION_SYSTEM_PROMPT,
+    [{ role: 'user', content: rawInput }],
+    800
+  )
+  const fallback = {
+    full_name: null, email: null, title: null, domain: 'other',
+    topics: [], exclusions: [], routing_preferences: [],
+    availability: null, confidence_notes: {}
+  }
+  return parseJSON(text, fallback)
+}
 
 export async function conductInterview(
   messages: InterviewMessage[],
@@ -231,61 +377,46 @@ export async function conductInterview(
     role: m.role === 'sme' ? 'user' as const : 'assistant' as const,
     content: m.content
   }))
-
   const fullMessages = smeInput
     ? [...history, { role: 'user' as const, content: smeInput }]
     : [{ role: 'user' as const, content: 'Hello, ready to start.' }]
-
   return callLLM(SME_INTERVIEW_SYSTEM_PROMPT, fullMessages, 400)
 }
 
-export async function synthesizeKBEntry(
+export async function synthesizeKBEntries(
   transcript: InterviewMessage[],
   topic: string
-): Promise<{
-  title: string
-  topic: string
-  subtopic?: string
-  content: string
-  keywords: string[]
-  confidence_hint: number
-  review_cadence: string
-  routing_notes: string
-  visibility: 'internal' | 'user_visible'
-}> {
+): Promise<Array<{
+  topic_tag: string
+  question_framing: string
+  synthesized_answer: string
+  exposable_to_users: boolean
+}>> {
   const transcriptText = transcript
     .map(m => `${m.role === 'assistant' ? 'Thoth' : 'SME'}: ${m.content}`)
     .join('\n\n')
 
   const text = await callLLM(
     SYNTHESIS_SYSTEM_PROMPT,
-    [{
-      role: 'user',
-      content: `Synthesize this interview about "${topic}" into a KB entry:\n\n${transcriptText}`
-    }],
+    [{ role: 'user', content: `Synthesize this interview about "${topic}" into knowledge base entries:\n\n${transcriptText}` }],
     1500
   )
 
-  const fallback = {
-    title: `${topic} Knowledge Entry`,
-    topic,
-    content: transcriptText.slice(0, 500),
-    keywords: [topic],
-    confidence_hint: 0.5,
-    review_cadence: 'quarterly',
-    routing_notes: 'Contact SME directly for questions.',
-    visibility: 'internal' as const
-  }
+  const fallback = [{
+    topic_tag: topic.toLowerCase().replace(/\s+/g, '_'),
+    question_framing: `What should I know about ${topic}?`,
+    synthesized_answer: transcriptText.slice(0, 300),
+    exposable_to_users: true
+  }]
 
   const parsed = parseJSON(text, fallback)
-  if (parsed.visibility !== 'user_visible') parsed.visibility = 'internal'
-  return parsed
+  return Array.isArray(parsed) ? parsed : fallback
 }
 
 export async function handleUserQuery(
   question: string,
-  kbResults: (KBEntry & { similarity: number })[],
-  allSMEs: SMEProfile[]
+  kbResults: KBRow[],
+  allSMEs: SMERow[]
 ): Promise<QueryResult> {
   const text = await callLLM(
     buildQueryPrompt(kbResults, allSMEs),
@@ -295,7 +426,6 @@ export async function handleUserQuery(
 
   const fallback = { action: 'routed_admin' as const, confidence_score: 0 }
   const parsed = parseJSON(text, fallback)
-
   const validActions = ['answered', 'clarified', 'routed_sme', 'routed_admin']
   const action = validActions.includes(parsed.action) ? parsed.action : 'routed_admin'
 
@@ -313,17 +443,18 @@ export async function handleUserQuery(
     clarifying_question: parsed.clarifying_question,
     routed_sme,
     routed_smes,
+    routing_reason: parsed.routing_reason,
     kb_entries_used: parsed.kb_entry_ids || [],
     confidence_score: parsed.confidence_score || 0,
-    sources: parsed.sources_used?.map((title: string) => ({
-      title,
-      visibility: kbResults.find(e => e.title === title)?.visibility || 'internal'
+    sources: parsed.sources_used?.map((tag: string) => ({
+      topic_tag: tag,
+      exposable_to_users: kbResults.find(e => e.topic_tag === tag)?.exposable_to_users ?? false
     }))
   }
 }
 
 // ============================================
-// EMBEDDINGS
+// EMBEDDINGS — triggered at admin publish time
 // ============================================
 export async function generateEmbedding(text: string): Promise<number[]> {
   if (process.env.OPENAI_API_KEY) {
@@ -347,7 +478,6 @@ async function generateEmbeddingHuggingFace(text: string): Promise<number[]> {
   const urls = [
     'https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2/pipeline/feature-extraction',
     'https://api-inference.huggingface.co/models/sentence-transformers/all-MiniLM-L6-v2',
-    'https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2',
   ]
 
   for (const url of urls) {
@@ -358,31 +488,21 @@ async function generateEmbeddingHuggingFace(text: string): Promise<number[]> {
           'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          inputs: text,
-          options: { wait_for_model: true }
-        })
+        body: JSON.stringify({ inputs: text, options: { wait_for_model: true } })
       })
 
-      if (!response.ok) {
-        console.log(`[HF] ${url} returned ${response.status}`)
-        continue
-      }
+      if (!response.ok) { console.log(`[HF] ${url} returned ${response.status}`); continue }
 
       const data = await response.json()
-
       if (Array.isArray(data) && Array.isArray(data[0])) return data[0]
       if (Array.isArray(data) && typeof data[0] === 'number') return data
       if (data.embeddings) return data.embeddings[0]
 
       console.log(`[HF] Unexpected shape from ${url}`)
-      continue
-
     } catch (err: any) {
       console.log(`[HF] ${url} threw: ${err.message}`)
-      continue
     }
   }
 
-  throw new Error('HuggingFace embedding failed on all URLs. Check your HUGGINGFACE_API_KEY.')
+  throw new Error('HuggingFace embedding failed. Check your HUGGINGFACE_API_KEY.')
 }

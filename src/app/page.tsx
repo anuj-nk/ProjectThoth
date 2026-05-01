@@ -25,7 +25,7 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-4">
           <span className="text-white/40 text-xs uppercase tracking-widest">
-            {session.role === 'sme' && `SME: ${session.sme_profile?.name}`}
+            {session.role === 'sme' && `SME: ${session.sme_profile?.full_name}`}
             {session.role === 'admin' && 'Admin Dashboard'}
             {session.role === 'user' && 'Knowledge Portal'}
           </span>

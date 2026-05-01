@@ -10,11 +10,11 @@ import type { CreateSMEProfile } from '@/types'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { email, name, role, contact_info, topics_owned, topics_not_owned } = body
+    const { full_name, email, title, domain, topics, exclusions, routing_preferences } = body
 
-    if (!email || !name || !role) {
+    if (!full_name || !email || !domain) {
       return NextResponse.json(
-        { error: 'email, name, and role are required' },
+        { error: 'full_name, email, and domain are required' },
         { status: 400 }
       )
     }
@@ -31,20 +31,20 @@ export async function POST(req: NextRequest) {
 
     // Create new profile
     const profile = await smeApi.create({
+      full_name,
       email,
-      name,
-      role,
-      contact_info: contact_info || {},
-      topics_owned: topics_owned || [],
-      topics_not_owned: topics_not_owned || [],
+      title: title || undefined,
+      domain,
+      topics: topics || [],
+      exclusions: exclusions || [],
+      routing_preferences: routing_preferences || [],
       availability: 'available',
-      is_active: true
     } as CreateSMEProfile)
 
     return NextResponse.json({
       profile,
       created: true,
-      message: `Welcome, ${name}! Your SME profile has been created.`
+      message: `Welcome, ${full_name}! Your SME profile has been created.`
     })
   } catch (error: any) {
     console.error('SME onboard error:', error)

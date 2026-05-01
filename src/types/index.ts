@@ -1,88 +1,95 @@
 // ============================================
 // PROJECT THOTH - Core TypeScript Types
+// Matches actual Supabase schema exactly
 // ============================================
 
 // --------------------------------------------
-// SME Profile
+// SME Profile (matches sme_profiles table)
 // --------------------------------------------
 export interface SMEProfile {
-  id: string
-  name: string
-  role: string
+  sme_id: string
+  full_name: string
   email: string
-  contact_info: {
-    slack?: string
-    phone?: string
-    calendar_link?: string
-  }
-  topics_owned: string[]
-  topics_not_owned: string[]
-  availability: 'available' | 'limited' | 'unavailable'
-  is_active: boolean
+  title?: string
+  domain: 'academics' | 'career_services' | 'facilities' | 'prototyping_lab' | 'admissions' | 'it_purchasing' | 'student_wellbeing' | 'other'
+  topics: string[]
+  exclusions: string[]
+  routing_preferences: RoutingPreference[]
+  availability?: string
+  profile_source_input?: string
   created_at: string
-  updated_at: string
+  last_reviewed_at?: string
+  next_review_due?: string
 }
 
-export type CreateSMEProfile = Omit<SMEProfile, 'id' | 'created_at' | 'updated_at'>
+export interface RoutingPreference {
+  channel: 'teams' | 'email' | 'scheduling_link' | 'in_person'
+  priority: number
+}
+
+export type CreateSMEProfile = Omit<SMEProfile, 'sme_id' | 'created_at'>
 
 // --------------------------------------------
-// KB Entry
+// Knowledge Entry (matches knowledge_entries table)
 // --------------------------------------------
-export type KBStatus = 'draft' | 'pending_sme' | 'pending_admin' | 'approved' | 'archived'
-export type Visibility = 'internal' | 'user_visible'
+export type KBStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 'stale'
 
 export interface KBEntry {
-  id: string
+  entry_id: string
   sme_id: string
-  topic: string
-  subtopic?: string
-  title: string
-  content: string
-  raw_transcript?: string        // never exposed to users
-  status: KBStatus
-  visibility: Visibility
-  keywords: string[]
-  confidence_hint: number
-  review_date?: string
-  reviewed_at?: string
-  approved_by?: string
+  topic_tag: string
+  question_framing: string
+  synthesized_answer: string
+  supporting_doc_ids: string[]
+  exposable_to_users: boolean
+  raw_transcript_id?: string
   embedding?: number[]
+  status: KBStatus
+  approved_by_sme_id?: string
+  approved_at?: string
+  next_review_due?: string
+  created_at: string
+  // Joined (not in DB, populated via select)
+  sme_profiles?: SMEProfile
+}
+
+export type CreateKBEntry = Omit<KBEntry, 'entry_id' | 'created_at' | 'embedding' | 'sme_profiles'>
+
+// --------------------------------------------
+// Raw Transcript (matches raw_transcripts table)
+// Never exposed to end users — internal only
+// --------------------------------------------
+export interface RawTranscript {
+  transcript_id: string
+  sme_id: string
+  session_id: string
+  messages: InterviewMessage[]
+  uploaded_doc_ids: string[]
+  synthesized_entry_ids: string[]
+  created_at: string
+}
+
+// --------------------------------------------
+// Interview Session (matches interview_sessions table)
+// --------------------------------------------
+export type InterviewStage =
+  | 'input_received'
+  | 'extracting'
+  | 'profile_review'
+  | 'boundaries_routing'
+  | 'interview_active'
+  | 'synthesis_review'
+  | 'completed'
+
+export interface InterviewSession {
+  session_id: string
+  sme_id?: string
+  stage: InterviewStage
+  message_history: InterviewMessage[]
+  draft_profile?: Partial<SMEProfile>
+  draft_entries: Partial<KBEntry>[]
   created_at: string
   updated_at: string
-  // Joined
-  sme?: SMEProfile
-  documents?: Document[]
-}
-
-export type CreateKBEntry = Omit<KBEntry, 'id' | 'created_at' | 'updated_at' | 'embedding' | 'sme' | 'documents'>
-
-// --------------------------------------------
-// Document
-// --------------------------------------------
-export interface Document {
-  id: string
-  kb_entry_id?: string
-  sme_id: string
-  file_name: string
-  file_type: string
-  storage_path: string
-  extracted_text?: string
-  visibility: Visibility
-  uploaded_at: string
-}
-
-// --------------------------------------------
-// Interview
-// --------------------------------------------
-export interface Interview {
-  id: string
-  sme_id: string
-  kb_entry_id?: string
-  topic: string
-  messages: InterviewMessage[]
-  status: 'in_progress' | 'completed' | 'abandoned'
-  started_at: string
-  completed_at?: string
 }
 
 export interface InterviewMessage {
@@ -92,52 +99,38 @@ export interface InterviewMessage {
 }
 
 // --------------------------------------------
-// Routing
-// --------------------------------------------
-export interface RoutingRule {
-  id: string
-  topic_pattern: string
-  primary_sme_id?: string
-  fallback_sme_id?: string
-  escalate_to_admin: boolean
-  priority: number
-  created_at: string
-}
-
-// --------------------------------------------
 // Query / User Flow
 // --------------------------------------------
-export type QueryAction = 'answered' | 'routed_sme' | 'routed_admin' | 'clarified' | 'escalated'
+export type QueryAction = 'answered' | 'routed_sme' | 'routed_admin' | 'clarified'
 
 export interface QueryResult {
   action: QueryAction
   answer?: string
   clarifying_question?: string
   routed_sme?: SMEProfile
-  routed_smes?: SMEProfile[]   // for overlapping expertise
-  kb_entries_used?: string[]
-  confidence_score?: number
+  routed_smes?: SMEProfile[]
+  routing_reason?: string
+  kb_entries_used: string[]
+  confidence_score: number
   sources?: {
-    title: string
-    visibility: Visibility
+    topic_tag: string
+    exposable_to_users: boolean
   }[]
 }
 
+// query_logs table is planned for CI-2, not yet built
 export interface QueryLog {
-  id: string
-  session_id: string
-  question: string
-  answer?: string
-  action_taken: QueryAction
-  kb_entries_used?: string[]
-  sme_routed_to?: string
-  confidence_score?: number
-  was_helpful?: boolean
-  asked_at: string
+  query_id: string
+  query_text: string
+  resolution_path: 'kb_answer' | 'sme_redirect' | 'admin_fallback' | 'clarification_asked'
+  matched_entry_ids: string[]
+  routed_to_sme_id?: string
+  confidence_score: number
+  created_at: string
 }
 
 // --------------------------------------------
-// Chat / Conversation
+// Chat / Conversation (UI only, not persisted)
 // --------------------------------------------
 export interface ChatMessage {
   id: string
@@ -153,12 +146,12 @@ export interface ChatMessage {
 }
 
 // --------------------------------------------
-// App Roles (for role-based UI switching)
+// App Roles
 // --------------------------------------------
 export type AppRole = 'user' | 'sme' | 'admin'
 
 export interface AppSession {
   role: AppRole
-  sme_profile?: SMEProfile      // populated if role = 'sme'
-  session_id: string            // anonymous ID for users
+  sme_profile?: SMEProfile
+  session_id: string
 }
