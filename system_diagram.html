@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Thoth - System Diagrams</title>
+<style>
+  :root {
+    --tm-magenta: #E20074;
+    --wine: #5C1A2E;
+    --wine-dark: #3D0F1E;
+    --wine-light: #F5E6EA;
+    --beige: #F1EFE8;
+    --beige-dark: #E5E2D5;
+    --black: #000000;
+    --text-1: #1F1F1F;
+    --text-2: #6A6A6A;
+    --text-3: #9A9A9A;
+    --border: #E8E8E8;
+    --border-strong: #C7C7C7;
+    --success: #3B6D11;
+    --success-bg: #EAF3DE;
+    --warning: #854F0B;
+    --warning-bg: #FAEEDA;
+    --danger: #A32D2D;
+    --danger-bg: #FCEBEB;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #FAFAFA; color: var(--text-1);
+    line-height: 1.55; padding: 30px 0 80px;
+  }
+  .page { max-width: 980px; margin: 0 auto; padding: 0 24px; }
+
+  header.top {
+    margin-bottom: 28px; padding-bottom: 18px;
+    border-bottom: 2px solid var(--wine);
+  }
+  .brand-line {
+    font-size: 11px; color: var(--text-2);
+    text-transform: uppercase; letter-spacing: 1.5px;
+    margin-bottom: 6px;
+  }
+  .brand-line b { color: var(--tm-magenta); font-weight: 700; }
+  h1 { font-size: 28px; font-weight: 700; color: var(--black); letter-spacing: -0.5px; }
+  .page-sub { color: var(--text-2); font-size: 14px; margin-top: 6px; max-width: 720px; }
+
+  /* Section */
+  section { margin-bottom: 44px; }
+  section h2 {
+    font-size: 17px; font-weight: 700; color: var(--wine);
+    text-transform: uppercase; letter-spacing: 1px;
+    padding-bottom: 6px; margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  section h2 .sec-num {
+    display: inline-block; min-width: 28px; height: 22px;
+    background: var(--wine); color: white;
+    border-radius: 4px; padding: 0 7px;
+    font-size: 12px; line-height: 22px;
+    margin-right: 10px; vertical-align: 1px;
+  }
+  section .lead { color: var(--text-2); font-size: 13px; margin-bottom: 14px; max-width: 760px; }
+  .card {
+    background: white; border-radius: 10px; padding: 22px;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  /* Tree (vocabulary hierarchy) */
+  .tree { font-size: 13px; }
+  .tree-children {
+    margin-left: 12px; padding-left: 18px;
+    border-left: 1.5px dashed var(--border-strong);
+  }
+  .tree-node {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 7px 12px; margin: 5px 0;
+    border-radius: 6px;
+    font-weight: 500;
+    background: white; border: 1px solid var(--border);
+  }
+  .tree-node.lvl-domain   { background: var(--wine); color: white; border-color: var(--wine); }
+  .tree-node.lvl-domain b { color: white; }
+  .tree-node.lvl-sme      { background: var(--wine-light); color: var(--wine); border-color: var(--wine); }
+  .tree-node.lvl-topic    { background: var(--beige); color: var(--text-1); border-color: var(--beige-dark); }
+  .tree-node.lvl-entry    { background: white; color: var(--text-1); border: 1px dashed var(--border-strong); font-weight: 400; font-family: 'SF Mono', Monaco, monospace; font-size: 12px; }
+  .tree-node .meta {
+    font-weight: 400; font-size: 11px; opacity: 0.85;
+    font-family: 'SF Mono', Monaco, monospace;
+  }
+  .tree-node .star {
+    background: white; color: var(--wine); font-weight: 700;
+    width: 18px; height: 18px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; flex-shrink: 0;
+  }
+  .tree-node.primary { background: var(--wine); color: white; border-color: var(--wine); }
+  .tree-node.primary .meta { color: rgba(255,255,255,0.85); }
+  .tree-node.primary .star { background: white; color: var(--wine); }
+
+  /* Side-by-side: tree + callouts */
+  .tree-layout {
+    display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 20px;
+  }
+  .callouts {
+    display: flex; flex-direction: column; gap: 10px;
+    font-size: 12px; color: var(--text-2);
+  }
+  .callout {
+    padding: 10px 12px; border-radius: 6px;
+    background: var(--beige); border-left: 3px solid var(--wine);
+    line-height: 1.6;
+  }
+  .callout b { color: var(--wine); }
+
+  /* Pipeline */
+  .pipeline { display: flex; flex-direction: column; gap: 0; }
+  .pipe-step {
+    display: flex; gap: 14px;
+    padding: 14px 16px;
+    background: white; border: 1px solid var(--border);
+    border-radius: 8px;
+    align-items: flex-start;
+  }
+  .pipe-step.terminal { background: var(--success-bg); border-color: var(--success); }
+  .pipe-step.miss     { background: var(--warning-bg); border-color: var(--warning); }
+  .pipe-num {
+    width: 28px; height: 28px; flex-shrink: 0;
+    background: var(--wine); color: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  .pipe-num.alt { background: var(--tm-magenta); }
+  .pipe-num.miss { background: var(--warning); }
+  .pipe-num.term { background: var(--success); }
+  .pipe-body { flex: 1; }
+  .pipe-title { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
+  .pipe-detail { font-size: 12px; color: var(--text-2); line-height: 1.55; }
+  .pipe-detail code, .code {
+    font-family: 'SF Mono', Monaco, monospace; font-size: 11px;
+    background: var(--beige); padding: 1px 5px; border-radius: 3px;
+    color: var(--wine);
+  }
+  .arrow {
+    text-align: center; color: var(--text-3); font-size: 18px;
+    padding: 4px 0; line-height: 1;
+  }
+
+  /* Branch indicator (for sub-paths within a step) */
+  .branch {
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: var(--beige); border-radius: 6px;
+    font-size: 12px; color: var(--text-1);
+  }
+  .branch + .branch { margin-top: 4px; }
+  .branch .label {
+    display: inline-block;
+    background: white; color: var(--wine);
+    border: 1px solid var(--wine); border-radius: 4px;
+    padding: 1px 6px; font-size: 10px; font-weight: 600;
+    margin-right: 8px;
+  }
+  .branch.miss { background: var(--warning-bg); color: var(--warning); }
+  .branch.miss .label { background: var(--warning-bg); color: var(--warning); border-color: var(--warning); }
+
+  /* Side-by-side recall (parallel paths) */
+  .parallel {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-top: 8px;
+  }
+  .par-box {
+    padding: 10px 12px; border-radius: 6px;
+    background: var(--wine-light);
+    border: 1px solid var(--wine);
+    font-size: 12px;
+  }
+  .par-box .par-title {
+    font-weight: 600; font-size: 12px; color: var(--wine);
+    margin-bottom: 4px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .par-box .par-detail { color: var(--text-1); line-height: 1.5; }
+  .par-box .par-tag {
+    background: var(--wine); color: white; font-size: 9px;
+    padding: 1px 6px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.4px;
+  }
+
+  /* Decision tree */
+  .decision { font-family: 'SF Mono', Monaco, monospace; font-size: 13px; line-height: 1.8; }
+  .decision .if    { color: var(--wine); font-weight: 700; }
+  .decision .yes   { color: var(--success); font-weight: 600; }
+  .decision .no    { color: var(--text-2); font-weight: 600; }
+  .decision .term  { background: var(--success-bg); color: var(--success); padding: 1px 8px; border-radius: 4px; font-weight: 600; }
+  .decision .term.route { background: var(--warning-bg); color: var(--warning); }
+  .decision .term.admin { background: var(--danger-bg); color: var(--danger); }
+  .decision .term.clarify { background: var(--wine-light); color: var(--wine); }
+  .decision .indent { padding-left: 24px; }
+
+  /* Layered cascade */
+  .layers {
+    display: flex; flex-direction: column; gap: 8px;
+    counter-reset: layer;
+  }
+  .layer-row {
+    display: grid; grid-template-columns: 100px 1fr; gap: 14px;
+    padding: 10px 14px; border-radius: 6px;
+    background: white; border: 1px solid var(--border);
+    align-items: center;
+  }
+  .layer-row.poc-skip { opacity: 0.55; background: var(--beige); }
+  .layer-row .lyr-tag {
+    background: var(--wine); color: white; font-weight: 600;
+    border-radius: 4px; padding: 4px 10px;
+    font-size: 11px; text-align: center;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .layer-row .lyr-body { font-size: 13px; }
+  .layer-row .lyr-body code { font-family: 'SF Mono', Monaco, monospace; font-size: 11px; background: var(--beige); padding: 1px 4px; border-radius: 3px; }
+  .layer-row .lyr-note { font-size: 11px; color: var(--text-2); margin-top: 2px; }
+
+  /* Big-picture overview */
+  .overview {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    align-items: stretch;
+  }
+  .ov-col {
+    background: white; border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px;
+  }
+  .ov-col.write  { border-top: 4px solid var(--wine); }
+  .ov-col.store  { border-top: 4px solid var(--text-2); background: var(--beige); }
+  .ov-col.read   { border-top: 4px solid var(--tm-magenta); }
+  .ov-col h3 {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.6px; margin-bottom: 10px;
+    color: var(--text-1);
+  }
+  .ov-step {
+    font-size: 12px; padding: 6px 10px; margin: 4px 0;
+    background: white; border: 1px solid var(--border);
+    border-radius: 5px;
+  }
+  .ov-col.store .ov-step { background: white; }
+  .ov-step .ov-tag {
+    display: inline-block; font-family: 'SF Mono', Monaco, monospace;
+    font-size: 10px; color: var(--wine); margin-left: 6px;
+  }
+  .ov-step.endpoint { background: var(--wine-light); border-color: var(--wine); }
+  .ov-arrows-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px; text-align: center;
+    margin: 6px 0; color: var(--text-3); font-size: 14px;
+  }
+
+  /* Footer note */
+  footer.bottom {
+    margin-top: 36px; padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-2);
+  }
+  footer.bottom a { color: var(--wine); }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+<header class="top">
+  <div class="brand-line">A <b>T-Mobile</b> &times; GIX hackathon project</div>
+  <h1>Project Thoth - System Diagrams</h1>
+  <p class="page-sub">How the controlled vocabulary, topic normalization, hybrid retrieval, and routing logic fit together. Six diagrams covering both the SME write path and the student read path.</p>
+</header>
+
+
+<!-- ========== 1. VOCABULARY HIERARCHY ========== -->
+
+<section>
+  <h2><span class="sec-num">1</span>Vocabulary hierarchy &amp; controlled vocabulary</h2>
+  <p class="lead">From largest to smallest. The controlled vocabulary lives in <span class="code">topic_taxonomy.yaml</span>; every <span class="code">topic_id</span> in the database must exist there.</p>
+
+  <div class="card">
+    <div class="tree-layout">
+      <div class="tree">
+        <div class="tree-node lvl-domain">
+          <span>DOMAIN</span><span class="meta">sme_profiles.domain</span>
+        </div>
+        <div class="tree-children">
+          <div class="tree-node lvl-domain" style="background: var(--wine-dark);">
+            <span>Career Services</span>
+          </div>
+          <div class="tree-children">
+
+            <div class="tree-node lvl-sme">
+              <span>SME</span><span class="meta">sme_profiles row</span>
+            </div>
+            <div class="tree-children">
+              <div class="tree-node lvl-sme" style="background: white;">
+                <span>Patrick Chidsey</span>
+              </div>
+              <div class="tree-children">
+
+                <div class="tree-node lvl-topic">
+                  <span>TOPICS</span>
+                  <span class="meta">sme_profiles.topics  /  knowledge_entries.topic_tag[]</span>
+                </div>
+                <div class="tree-children">
+                  <div class="tree-node lvl-topic primary">
+                    <span class="star">&#9733;</span>
+                    <span>CPT</span>
+                    <span class="meta">primary</span>
+                  </div>
+                  <div class="tree-node lvl-topic primary">
+                    <span class="star">&#9733;</span>
+                    <span>TECHIN 601</span>
+                    <span class="meta">primary</span>
+                  </div>
+                  <div class="tree-node lvl-topic">
+                    <span class="star" style="color:var(--text-3);background:var(--beige-dark);">&#9734;</span>
+                    <span>OPT</span>
+                    <span class="meta">secondary</span>
+                  </div>
+                  <div class="tree-node lvl-topic">
+                    <span class="star" style="color:var(--text-3);background:var(--beige-dark);">&#9734;</span>
+                    <span>Internship Search</span>
+                    <span class="meta">secondary</span>
+                  </div>
+                  <div class="tree-node lvl-topic">
+                    <span class="star" style="color:var(--text-3);background:var(--beige-dark);">&#9734;</span>
+                    <span>Visa Timeline</span>
+                    <span class="meta">secondary</span>
+                  </div>
+
+                  <div class="tree-children">
+                    <div class="tree-node lvl-entry">
+                      knowledge_entry &nbsp; Q: 'When should I start my CPT application?'
+                    </div>
+                    <div class="tree-node lvl-entry">
+                      &nbsp; topic_tag = ['cpt', 'i20', 'internship', 'international_student']
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="tree-node lvl-sme" style="background: white;">
+                <span>Jason Evans</span>
+                <span class="meta">topics: course_petitions, transcripts</span>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="callouts">
+        <div class="callout">
+          <b>Controlled vocabulary</b><br>
+          All <span class="code">topic_id</span> values come from <span class="code">topic_taxonomy.yaml</span>. Free text never goes straight into <span class="code">topic_tag</span>; it must normalize first (see Section 2).
+        </div>
+        <div class="callout">
+          <b>Primary vs secondary</b><br>
+          <span class="star" style="display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;background:var(--wine);color:white;border-radius:50%;font-size:9px;">&#9733;</span>
+          Primary = drives routing ownership.<br>
+          &#9734; Secondary = expands recall (a student querying any one of these tags can surface the entry).
+        </div>
+        <div class="callout">
+          <b>An entry can have multiple primary tags</b><br>
+          A single Q&amp;A about CPT timing legitimately belongs to CPT and Visa Timeline at once. Both can be primary; UI highlights both stars.
+        </div>
+        <div class="callout" style="border-left-color: var(--text-2);">
+          <b>Domain hierarchy in PoC</b><br>
+          Layer 1 Domain &rarr; Layer 2 SME &rarr; Layer 3 Topic. Layer 4 sub-topics are deferred (see Section 4).
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ========== 2. NORMALIZATION PIPELINE ========== -->
+
+<section>
+  <h2><span class="sec-num">2</span>Topic normalization (write path)</h2>
+  <p class="lead">How free-text topics from an SME interview become canonical <span class="code">topic_id</span> values. Implemented in <span class="code">langgraph_sme_intake.normalize_topics_node</span>.</p>
+
+  <div class="card">
+    <div class="pipeline">
+
+      <div class="pipe-step">
+        <div class="pipe-num">1</div>
+        <div class="pipe-body">
+          <div class="pipe-title">LLM extracts free-text candidates from the SME's input</div>
+          <div class="pipe-detail">
+            From the profile blob and interview turns, the LLM emits a list of free-form topic strings. Example output:<br>
+            <span class="code">['CPT timeline', 'I-20 form', 'International student visa']</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">&darr;</div>
+
+      <div class="pipe-step">
+        <div class="pipe-num">2</div>
+        <div class="pipe-body">
+          <div class="pipe-title">For each candidate, normalize against <span class="code">topic_taxonomy.yaml</span></div>
+          <div class="pipe-detail">Cascade three matchers; first hit wins. Move on to the next matcher only on miss.</div>
+          <div class="branch">
+            <span class="label">2a</span>
+            Exact match against <span class="code">topic.id</span> or <span class="code">display_name</span>?
+            &rarr; map to that <span class="code">topic_id</span>.
+          </div>
+          <div class="branch">
+            <span class="label">2b</span>
+            Alias hit on <span class="code">topic.aliases[]</span>?
+            &rarr; map to that <span class="code">topic_id</span>.
+            <em style="color:var(--text-2);">e.g. 'CPT timeline' &rarr; alias 'cpt application' &rarr; <span class="code">cpt</span></em>
+          </div>
+          <div class="branch">
+            <span class="label">2c</span>
+            Embedding fuzzy match: cosine(candidate_embed, taxonomy_topic_embed) &ge; 0.85?
+            &rarr; map to nearest <span class="code">topic_id</span>.
+            <em style="color:var(--text-2);">e.g. 'International student visa' &rarr; nearest is <span class="code">visa</span></em>
+          </div>
+          <div class="branch miss">
+            <span class="label">2d</span>
+            None of the above &rarr; mark as <span class="code">unmatched</span>; carry into <span class="code">state.unmatched_topics</span>.
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">&darr;</div>
+
+      <div class="pipe-step terminal">
+        <div class="pipe-num term">3</div>
+        <div class="pipe-body">
+          <div class="pipe-title">Hits &rarr; canonical <span class="code">topic_id</span> stored in <span class="code">knowledge_entries.topic_tag</span></div>
+          <div class="pipe-detail">
+            Multi-tag (text[]). First element = primary. Saved during <span class="code">persist_node</span> alongside the entry's question, answer, and embedding.
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">&darr;</div>
+
+      <div class="pipe-step miss">
+        <div class="pipe-num miss">4</div>
+        <div class="pipe-body">
+          <div class="pipe-title">Unmatched &rarr; <span class="code">admin_queue</span> (source = sme_intake)</div>
+          <div class="pipe-detail">
+            Admin reviews via <span class="code">scripts/admin_inbox.py</span> and decides one of:
+          </div>
+          <div class="branch"><span class="label">resolved</span>map to existing <span class="code">topic_id</span> (rename or merge)</div>
+          <div class="branch"><span class="label">needs_sme</span>promote to a new topic and onboard an owner SME</div>
+          <div class="branch miss"><span class="label">dismissed</span>out of scope for Thoth</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ========== 3. RETRIEVAL PIPELINE (READ PATH) ========== -->
+
+<section>
+  <h2><span class="sec-num">3</span>Hybrid retrieval pipeline (read path)</h2>
+  <p class="lead">When a student asks a question. Implemented in <span class="code">langgraph_user_query.hybrid_retrieve_node</span> + <span class="code">judge_node</span>.</p>
+
+  <div class="card">
+    <div class="pipeline">
+
+      <div class="pipe-step">
+        <div class="pipe-num">A</div>
+        <div class="pipe-body">
+          <div class="pipe-title">SQL hard filter</div>
+          <div class="pipe-detail">
+            Strip rows that should never be returned, regardless of similarity. Topic filter applied only if the query mapped to known taxonomy ids.<br>
+            <span class="code">WHERE status = 'approved' AND (topic_tag &amp;&amp; query_topics)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">&darr;</div>
+
+      <div class="pipe-step">
+        <div class="pipe-num alt">B</div>
+        <div class="pipe-body">
+          <div class="pipe-title">Parallel recall (top 20 each)</div>
+          <div class="pipe-detail">Two paths run independently. Each returns ranked candidates from the filtered pool.</div>
+          <div class="parallel">
+            <div class="par-box">
+              <div class="par-title"><span>Keyword path</span><span class="par-tag">tsvector</span></div>
+              <div class="par-detail">
+                Postgres full-text on <span class="code">search_tsv</span> (auto-generated from question + answer text).<br>
+                Rank by <span class="code">ts_rank</span>.
+              </div>
+            </div>
+            <div class="par-box">
+              <div class="par-title"><span>Vector path</span><span class="par-tag">pgvector</span></div>
+              <div class="par-detail">
+                Cosine similarity over <span class="code">embedding</span> column.<br>
+                <span class="code">ORDER BY embedding &lt;=&gt; query_embedding</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">&darr;</div>
+
+      <div class="pipe-step">
+        <div class="pipe-num">C</div>
+        <div class="pipe-body">
+          <div class="pipe-title">RRF fusion &rarr; top 5</div>
+          <div class="pipe-detail">
+            Reciprocal Rank Fusion combines the two paths.<br>
+            <span class="code">score = 1/(60 + kw_rank) + 1/(60 + vec_rank)</span><br>
+            Each candidate also carries flags: <span class="code">kw_hit</span> (matched keyword) / <span class="code">vec_hit</span> (matched vector). Used by the judge to detect off-topic queries.
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">&darr;</div>
+
+      <div class="pipe-step">
+        <div class="pipe-num">D</div>
+        <div class="pipe-body">
+          <div class="pipe-title">Confidence judge (decision tree, see Section 5)</div>
+          <div class="pipe-detail">
+            Looks at top-1 score, score gap, <span class="code">kw_hit</span> count, primary topic spread, SME spread.<br>
+            Decides one of: <span class="code">answer</span> / <span class="code">clarify</span> / <span class="code">route_sme</span> / <span class="code">route_admin</span>.
+          </div>
+        </div>
+      </div>
+
+      <div class="arrow">&darr;</div>
+
+      <div class="pipe-step terminal">
+        <div class="pipe-num term">E</div>
+        <div class="pipe-body">
+          <div class="pipe-title">LLM grounded answer (or routing message)</div>
+          <div class="pipe-detail">
+            For <span class="code">answer</span>: synthesize from the top exposable entries; cite each fact inline with <span class="code">[entry_id]</span>; UI strips citations from the visible bubble but keeps the cited version for the 'show sources' toggle.<br>
+            For <span class="code">route_*</span>: surface the SME's preferred channel from <span class="code">sme_profiles.routing_preferences</span>; never invent an answer.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+
+<!-- ========== 4. CASCADE FILTERING ========== -->
+
+<section>
+  <h2><span class="sec-num">4</span>Hierarchical fallback (cascade filtering)</h2>
+  <p class="lead">When a tight query filter returns nothing useful, widen the lens. Try the most precise scope first; broaden only if recall fails.</p>
+
+  <div class="card">
+    <div class="layers">
+      <div class="layer-row">
+        <div class="lyr-tag">Layer 3</div>
+        <div class="lyr-body">
+          <strong>Try by topic (tightest)</strong>
+          <div class="lyr-note"><code>WHERE status='approved' AND topic_tag &amp;&amp; ARRAY['cpt']</code> &nbsp; &mdash;&nbsp; if top score is high, stop here.</div>
+        </div>
+      </div>
+      <div class="arrow">&darr; recall too low</div>
+      <div class="layer-row poc-skip">
+        <div class="lyr-tag">Layer 2</div>
+        <div class="lyr-body">
+          <strong>Widen to SME</strong>
+          <div class="lyr-note"><code>WHERE status='approved' AND sme_id = patrick</code> &nbsp; &mdash;&nbsp; <em>deferred for PoC. Production wires this in.</em></div>
+        </div>
+      </div>
+      <div class="arrow">&darr; recall still low</div>
+      <div class="layer-row">
+        <div class="lyr-tag">Layer 1</div>
+        <div class="lyr-body">
+          <strong>Widen to domain (broadest)</strong>
+          <div class="lyr-note"><code>WHERE status='approved' AND domain = 'career_services'</code></div>
+        </div>
+      </div>
+      <div class="arrow">&darr; nothing matched</div>
+      <div class="layer-row" style="background: var(--danger-bg); border-color: #F7C1C1;">
+        <div class="lyr-tag" style="background: var(--danger);">Admin</div>
+        <div class="lyr-body">
+          <strong>Route to admin (no SME owns this query)</strong>
+          <div class="lyr-note">Insert into <code>admin_queue</code> with <code>source='user_query'</code>; admin triages.</div>
+        </div>
+      </div>
+    </div>
+    <div class="callout" style="margin-top: 16px;">
+      <b>PoC scope</b>: Only Layer 1 + Layer 3 are wired in <span class="code">hybrid_retrieve_node</span>. Layer 2 (SME-level fallback) and Layer 4 (sub-topic granularity) are noted in <span class="code">data_schema.yaml</span> as future work.
+    </div>
+  </div>
+</section>
+
+
+<!-- ========== 5. JUDGE DECISION TREE ========== -->
+
+<section>
+  <h2><span class="sec-num">5</span>Judge decision tree (when top-K spans multiple entries)</h2>
+  <p class="lead">After RRF returns top 5, decide whether to answer, clarify, or route. Logic in <span class="code">langgraph_user_query.judge_node</span>.</p>
+
+  <div class="card">
+    <div class="decision">
+      <div><span class="if">if</span> not query_topics <span class="if">and</span> not any(c.kw_hit <span class="if">for</span> c <span class="if">in</span> cands):</div>
+      <div class="indent">&rarr; <span class="term admin">route_admin</span> &nbsp; <span style="color:var(--text-2);">// off-topic guard, no signal anywhere</span></div>
+      <br>
+      <div><span class="if">elif</span> top1.score &lt; THRESHOLD_LOW:</div>
+      <div class="indent">owner = find_topic_owner(query_topics)</div>
+      <div class="indent"><span class="if">if</span> owner: &rarr; <span class="term route">route_sme</span> &nbsp; <span style="color:var(--text-2);">// case C: low confidence but topic has an owner</span></div>
+      <div class="indent"><span class="if">else</span>: &rarr; <span class="term admin">route_admin</span></div>
+      <br>
+      <div><span class="if">elif</span> not top1.exposable:</div>
+      <div class="indent">&rarr; <span class="term route">route_sme</span> (force) &nbsp; <span style="color:var(--text-2);">// e.g. fee_waiver: case-by-case, never answer directly</span></div>
+      <br>
+      <div><span class="if">elif</span> len(top3.primary_topics) &gt; 1 <span class="if">or</span> len(top3.smes) &gt; 1:</div>
+      <div class="indent"><span class="if">if</span> score_gap &lt; THRESHOLD_GAP:</div>
+      <div class="indent indent">&rarr; <span class="term clarify">clarify</span> &nbsp; <span style="color:var(--text-2);">// case B: multi-topic ambiguity, scores tight</span></div>
+      <div class="indent"><span class="if">else</span>:</div>
+      <div class="indent indent">&rarr; <span class="term">answer</span> &nbsp; <span style="color:var(--text-2);">// top1 dominates despite spread</span></div>
+      <br>
+      <div><span class="if">else</span>:</div>
+      <div class="indent">&rarr; <span class="term">answer</span> &nbsp; <span style="color:var(--text-2);">// case A: confident, single SME, single topic</span></div>
+    </div>
+
+    <div class="callouts" style="margin-top: 18px;">
+      <div class="callout">
+        <b>Case A</b> Multiple high-score entries on the same topic / same SME &rarr; merge them, feed the LLM, get one answer with multiple <span class="code">[entry_id]</span> citations.
+      </div>
+      <div class="callout">
+        <b>Case B</b> Multiple high-score entries on different primary topics or different SMEs and scores tight &rarr; ask the student a clarifying question to disambiguate before routing.
+      </div>
+      <div class="callout">
+        <b>Case C</b> All scores low (no entry confidently fits) &rarr; never fabricate. Look up topic owner from taxonomy; route to that SME, or to admin if none.
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<!-- ========== 6. BIG-PICTURE OVERVIEW ========== -->
+
+<section>
+  <h2><span class="sec-num">6</span>End-to-end overview</h2>
+  <p class="lead">SME write path on the left, shared data store in the middle, student read path on the right. Admin queue catches every miss in either direction.</p>
+
+  <div class="card">
+    <div class="overview">
+      <div class="ov-col write">
+        <h3>SME write path</h3>
+        <div class="ov-step">SME pastes profile blob<span class="ov-tag">screen 1</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">LLM extracts profile + free-text topics<span class="ov-tag">screen 2</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">Topic normalization (Section 2)<span class="ov-tag">screen 3</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">SME confirms profile, picks primary tags<span class="ov-tag">screen 3</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">Boundary multi-select + routing<span class="ov-tag">screen 4</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">Multi-turn interview (LangGraph HIL)<span class="ov-tag">screens 5-6</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">Synthesize entries, multi-tag<span class="ov-tag">screen 7</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">SME approves each entry<span class="ov-tag">screen 7</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step endpoint">Embed + persist to DB<span class="ov-tag">persist_node</span></div>
+      </div>
+
+      <div class="ov-col store">
+        <h3>Shared data store (Supabase v0.3)</h3>
+        <div class="ov-step"><b>sme_profiles</b><span class="ov-tag">topics, exclusions, routing</span></div>
+        <div class="ov-step"><b>knowledge_entries</b><span class="ov-tag">topic_tag[], embedding, search_tsv</span></div>
+        <div class="ov-step"><b>raw_transcripts</b><span class="ov-tag">audit only, never exposed</span></div>
+        <div class="ov-step"><b>interview_sessions</b><span class="ov-tag">resume state machine</span></div>
+        <div class="ov-step"><b>admin_queue</b><span class="ov-tag">all 'I don't know' signals</span></div>
+        <hr style="border:none;border-top:1px dashed var(--border-strong);margin:14px 0;">
+        <div class="ov-step" style="background: var(--wine-light); border-color: var(--wine);">
+          <b>topic_taxonomy.yaml</b><span class="ov-tag">controlled vocab</span>
+        </div>
+        <div style="font-size: 11px; color: var(--text-2); margin-top: 8px; line-height: 1.5;">
+          The taxonomy is read by both pipelines. PoC keeps it as YAML; production promotes it to a <span class="code">topic_taxonomy</span> table and adds an admin UI for promoting unmatched topics.
+        </div>
+      </div>
+
+      <div class="ov-col read">
+        <h3>Student read path</h3>
+        <div class="ov-step">Student types a question</div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">Extract candidate topics from query<span class="ov-tag">extract_query_topics</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">Hard filter + parallel recall (kw + vec)<span class="ov-tag">SQL CTEs</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">RRF fusion &rarr; top 5<span class="ov-tag">hybrid_retrieve_node</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step">Judge decision tree (Section 5)<span class="ov-tag">judge_node</span></div>
+        <div class="arrow">&darr;</div>
+        <div class="ov-step endpoint">answer (cited)</div>
+        <div class="ov-step endpoint">clarify (multi-topic)</div>
+        <div class="ov-step endpoint">route_sme (by name + channel)</div>
+        <div class="ov-step endpoint">route_admin &rarr; admin_queue</div>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top: 18px; border-left-color: var(--tm-magenta);">
+      <b>Admin closes the loop on both sides</b>:
+      every <span class="code">unmatched_topic</span> from SME intake AND every <span class="code">route_admin</span> from student queries lands in the same <span class="code">admin_queue</span> table. Admin promotes / merges / dismisses via <span class="code">scripts/admin_inbox.py</span>. This is how the controlled vocabulary grows over time.
+    </div>
+  </div>
+</section>
+
+
+<footer class="bottom">
+  Source files referenced in this diagram:
+  <span class="code">topic_taxonomy.yaml</span>,
+  <span class="code">data_schema.yaml</span>,
+  <span class="code">langgraph_sme_intake.py</span>,
+  <span class="code">langgraph_user_query.py</span>,
+  <span class="code">scripts/admin_inbox.py</span>.
+  &nbsp;|&nbsp; v1.0 (2026-04-30)
+</footer>
+
+</div>
+</body>
+</html>
