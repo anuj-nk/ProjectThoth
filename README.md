@@ -15,12 +15,12 @@
 
 | Layer | Status | Owner |
 |---|---|---|
-| **Schema (Supabase Postgres + pgvector)** | ✅ deployed (v0.3) | Iris |
-| **Topic taxonomy + admin queue** | ✅ done | Iris |
-| **Seed data** (2 SMEs, 7 entries, embeddings backfilled) | ✅ loaded | Iris |
-| **LangGraph SME intake agent** | ✅ code complete; end-to-end run pending | Iris |
-| **LangGraph user-query agent** | ✅ tested end-to-end (6 cases pass) | Iris |
-| **SME-side prototype** (`thoth_prototype.html` v0.2) | ✅ done; minor polish pending | Iris |
+| **Schema (Supabase Postgres + pgvector)** | ✅ deployed (v0.3) | Suzy |
+| **Topic taxonomy + admin queue** | ✅ done | Suzy |
+| **Seed data** (2 SMEs, 7 entries, embeddings backfilled) | ✅ loaded | Suzy |
+| **LangGraph SME intake agent** | ✅ code complete; end-to-end run pending | Suzy |
+| **LangGraph user-query agent** | ✅ tested end-to-end (6 cases pass) | Suzy |
+| **SME-side prototype** (`thoth_prototype.html` v0.2) | ✅ done; minor polish pending | Suzy |
 | **Student-side chat UI** | 🔴 **not started — your scope** | **Teammate** |
 | **Architecture diagram + demo script** | ⏳ next | TBD |
 
