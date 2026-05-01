@@ -11,21 +11,35 @@ dist/
 build/
 
 # Environment variables
+.env
 .env.local
+.env.*.local
 
 # Supabase
 supabase/.branches/
 supabase/.temp/
 
-# macOS
-.DS_Store
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.ipynb_checkpoints/
 
-# Logs
-*.log
-npm-debug.log*
+# OS
+.DS_Store
+Thumbs.db
 
 # Editor
 .vscode/
 .idea/
 *.swp
 *.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local-only working files
+archive/

@@ -1,33 +1,41 @@
-# Project Thoth - AI Agent Implementation
+# Project Thoth — GIX × T-Mobile Hackathon
 
-In src/scripts there are test interview questions that use the exsting api pathways and routes to do a simulated interview using Patrick as an example SME. Although it needs to be tweeked, the overall structure is there.
+> An agentic system that captures GIX experts' knowledge through structured
+> interviews, stores it in a reviewed repository, and lets students query it.
+> When the system can't answer, it routes to the right SME or to admin —
+> never fabricates.
 
-## Prerequisites
-
-First `cp .env.example .env.local` in terminal, then `npm install`.
-
-Make sure your `.env.local` is filled in:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_ROLE_KEY=eyJ...
-OPENROUTER_API_KEY=sk-or-v1-...
-HUGGINGFACE_API_KEY=hf_...
-GROQ_API_KEY=gsk_...
-LLM_PROVIDER=openrouter
-CONFIDENCE_THRESHOLD=0.75
-```
+**Reference SMEs (seed data):** Patrick Chidsey (Career Services), Jason Evans (Academic Services).
+**Final demo:** 2026-06-08.
+**Source of truth:** `Project_Thoth_PRD.md`
 
 ---
 
-## Running the App (UI)
+## Project status
+
+| Layer | Status | Owner |
+|---|---|---|
+| **Schema (Supabase Postgres + pgvector)** | ✅ deployed (v0.3) | Suzy |
+| **Topic taxonomy + admin queue** | ✅ done | Suzy |
+| **Seed data** (2 SMEs, 7 entries, embeddings backfilled) | ✅ loaded | Suzy |
+| **LangGraph SME intake agent** | ✅ code complete | Suzy |
+| **LangGraph user-query agent** | ✅ tested end-to-end (6 cases pass) | Suzy |
+| **SME-side prototype** (`thoth_prototype.html`) | ✅ done | Suzy |
+| **Next.js scaffold + API routes + test scripts** | ✅ done | Anuj |
+| **Student-side chat UI** | 🔴 in progress | Iris |
+| **Architecture diagram + demo script** | ⏳ next | TBD |
+
+---
+
+## Setup — Next.js app (Anuj's scaffold)
 
 ```bash
+cp .env.example .env.local
+npm install
 npm run dev
 ```
 
-Open **http://localhost:3000** in your browser.
+Open http://localhost:3000
 
 ### UI Flows
 
@@ -50,80 +58,33 @@ Open **http://localhost:3000** in your browser.
 
 ---
 
-## Test Scripts
+## Setup — Python / LangGraph (Suzy's agents)
+
+```bash
+conda env create -f environment.yml
+conda activate thoth
+cp .env.example .env
+# fill in SUPABASE_URL, SUPABASE_KEY, SUPABASE_DB_URL, OPENROUTER_API_KEY
+```
+
+Verify connection:
+
+```bash
+python -c "
+import os; from dotenv import load_dotenv; load_dotenv()
+import psycopg
+with psycopg.connect(os.environ['SUPABASE_DB_URL']) as c, c.cursor() as cur:
+    cur.execute('SELECT count(*) FROM knowledge_entries')
+    print(f'Entries in KB: {cur.fetchone()[0]}')
+"
+# Expected: Entries in KB: 7
+```
+
+---
+
+## Test scripts (Anuj)
 
 All scripts require env vars. Always prefix with `npx dotenv -e .env.local --`
-
-### 1. Check environment variables are loaded
-
-```bash
-npx dotenv -e .env.local -- tsx src/scripts/check-env.ts
-```
-
-Expected output:
-```
-OPENROUTER_API_KEY set: true
-SUPABASE_URL set: true
-Key starts with: sk-or-v1
-```
-
----
-
-### 2. Run automated interview (LLM plays both roles)
-
-```bash
-npx dotenv -e .env.local -- tsx src/scripts/test-interview-auto.ts
-```
-
-- Thoth interviews a simulated Patrick Chidsey using `career_services.yaml` seed questions
-- Covers: opening, tacit knowledge, boundary probes, evidence probes, exposure policy, maintenance
-- Runs 10-15 turns automatically, no input needed
-- **Output:** `src/scripts/last-transcript.json`
-
----
-
-### 3. Run manual interview (you play the SME)
-
-```bash
-npx dotenv -e .env.local -- tsx src/scripts/test-interview.ts
-```
-
-- You type responses as the SME
-- Type `quit` to end early
-- **Output:** `src/scripts/last-transcript.json`
-
----
-
-### 4. Synthesize KB entries from transcript
-
-```bash
-npx dotenv -e .env.local -- tsx src/scripts/test-synthesis.ts
-```
-
-- Reads `last-transcript.json`
-- Runs `synthesizeKBEntries()` to produce 4-6 structured KB entries
-- Prints each entry with quality checks (snake_case, question format, length, SME name leak)
-- **Output:** `src/scripts/last-kb-entries.json`
-
----
-
-### 5. Seed KB entries into Supabase
-
-```bash
-npx dotenv -e .env.local -- tsx src/scripts/test-seed-db.ts
-```
-
-- Reads `last-kb-entries.json`
-- Creates a test SME profile (Patrick Chidsey) in `sme_profiles`
-- Inserts all entries into `knowledge_entries` with `status: approved`
-- Generates and stores embeddings for each entry
-- **Output:** entry IDs printed to terminal, rows visible in Supabase dashboard
-
----
-
-## Full End-to-End Test Sequence
-
-Run these in order to go from zero to a working demo:
 
 ```bash
 # 1. Check env
@@ -140,11 +101,22 @@ npx dotenv -e .env.local -- tsx src/scripts/test-seed-db.ts
 
 # 5. Start the app and test the query flow
 npm run dev
-# → open http://localhost:3000
-# → select Student
+# → open http://localhost:3000 → select Student
 # → ask "When should I start my CPT application?"
-# → should get an answer with a citation
 ```
+
+---
+
+## Test queries (demo set)
+
+| # | Query | Decision |
+|---|---|---|
+| 1 | When should I start my CPT application? | `answer` |
+| 2 | Can I get a fee waiver for TECHIN 601? | `route_sme` |
+| 3 | How do I petition to waive a course? | `answer` |
+| 4 | I want to take an independent study, who do I talk to? | `answer` |
+| 5 | Who can help with my internship? | `clarify` |
+| 6 | Where is the closest coffee shop? | `route_admin` |
 
 ---
 
@@ -152,9 +124,19 @@ npm run dev
 
 | Problem | Fix |
 |---|---|
-| `All models failed` | OpenRouter rate limits hit — Groq fallback should kick in automatically. Check `GROQ_API_KEY` is set in `.env.local` |
-| `401 Unauthorized` | You ran `tsx` without `npx dotenv -e .env.local --` prefix — env vars not loaded |
-| `match_kb_entries not found` | Run the SQL function in Supabase SQL Editor (see `supabase/migrations/`) |
-| `column does not exist` | Run the full schema SQL in Supabase SQL Editor |
-| `No embedding provider` | Add `OPENAI_API_KEY` or `HUGGINGFACE_API_KEY` to `.env.local` |
+| `All models failed` | OpenRouter rate limits hit — check `GROQ_API_KEY` is set |
+| `401 Unauthorized` | Missing `npx dotenv -e .env.local --` prefix |
+| `match_kb_entries not found` | Run SQL function in Supabase SQL Editor |
+| `column does not exist` | Run full schema SQL in Supabase SQL Editor |
+| `No embedding provider` | Add `OPENAI_API_KEY` or `HUGGINGFACE_API_KEY` |
 | `npm install` fails with ERESOLVE | Add `--legacy-peer-deps` flag |
+
+---
+
+## Don'ts
+
+- ❌ Don't run `migrations/000_reset_and_create.sql` again — it drops every table
+- ❌ Don't commit `.env` or `.env.local` or any API key
+- ❌ Don't edit `thoth_prototype.html` (Suzy's SME prototype)
+- ❌ Don't change `topic_taxonomy.yaml` or `seed_knowledge_entries.sql` without flagging
+- ❌ Don't introduce purple in the UI
