@@ -7,7 +7,7 @@
 
 **Reference SMEs (seed data):** Patrick Chidsey (Career Services), Jason Evans (Academic Services).
 **Final demo:** 2026-06-08.
-**Source of truth:** [`Project_Thoth_PRD.md`](./Project_Thoth_PRD.md)
+**Source of truth:** Project Thoth PRD (shared separately with the team — ask Iris).
 
 ---
 
@@ -205,7 +205,6 @@ print(r['answer'][:120])  # → 'F-1 students should submit CPT...'
 ```
 Hackathon_Thon/
 ├── README.md                            ← you are here
-├── Project_Thoth_PRD.md                 ← full PRD (single source of truth)
 ├── environment.yml                      ← conda env definition
 ├── .env.example                         ← env var template (commit safe)
 ├── .env                                 ← your real keys (gitignored)
@@ -225,11 +224,9 @@ Hackathon_Thon/
 │   ├── 001_topic_tag_array.sql          ← v0.1 → v0.2 (multi-tag + tsvector)
 │   └── 002_admin_queue.sql              ← v0.2 → v0.3 (admin queue)
 │
-├── scripts/
-│   ├── backfill_embeddings.py           ← refill embeddings on bulk-loaded rows
-│   └── admin_inbox.py                   ← admin CLI for admin_queue
-│
-└── archive/                             ← old / superseded files
+└── scripts/
+    ├── backfill_embeddings.py           ← refill embeddings on bulk-loaded rows
+    └── admin_inbox.py                   ← admin CLI for admin_queue
 ```
 
 ---
@@ -288,7 +285,7 @@ with psycopg.connect(os.environ['SUPABASE_DB_URL']) as c, c.cursor() as cur:
 
 ## Quick links
 
-- **PRD:** `Project_Thoth_PRD.md`
+- **PRD:** shared separately with the team (ask Iris)
 - **Schema details:** `data_schema.yaml`
 - **The 6 demo cases:** see "Test queries" above
 - **Design tokens:** see "Design system" above (and `thoth_prototype.html` `<style>` block)
