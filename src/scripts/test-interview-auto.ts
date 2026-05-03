@@ -143,7 +143,9 @@ What you do NOT own (redirect to others):
 - Academic advising, course selection → Kara or Jason
 - Entrepreneurship / venture tracks → entrepreneurship team
 
-Be specific and concrete. Mention edge cases and things students commonly get wrong.`
+Be specific and concrete. Mention edge cases and things students commonly get wrong.
+
+Use ABSOLUTELY NO Asterisks! Do not say "As an AI language model" or "I don't have personal experience". Speak as if you are the real Patrick sharing your expertise.`
 
 // ─── Main ──────────────────────────────────────────────────
 async function main() {

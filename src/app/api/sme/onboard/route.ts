@@ -1,15 +1,48 @@
 // ============================================
 // API: /api/sme/onboard
-// Create or retrieve a persistent SME profile
+// Actions:
+//   POST { action: 'extract', raw_input }  → draft profile (no DB write)
+//   POST { action: 'create', ...fields }   → save profile to DB
+//   POST { ...fields } (no action)         → create profile (legacy)
+//   GET  ?email=                           → fetch by email
+//   GET  (no params)                       → list all SMEs
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { smeApi } from '@/lib/supabase'
+import { extractProfile } from '@/lib/claude'
+import { normalizeTopics } from '@/lib/taxonomy'
 import type { CreateSMEProfile } from '@/types'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+    const { action } = body
+
+    // --- LLM profile extraction (no DB write) ---
+    if (action === 'extract') {
+      const { raw_input } = body
+      if (!raw_input?.trim()) {
+        return NextResponse.json({ error: 'raw_input required' }, { status: 400 })
+      }
+
+      const draft = await extractProfile(raw_input)
+
+      // Normalize extracted topics against controlled vocabulary
+      const rawTopics: string[] = draft.topics || []
+      const { matched, unmatched } = normalizeTopics(rawTopics)
+
+      return NextResponse.json({
+        draft_profile: {
+          ...draft,
+          topics: matched,         // taxonomy IDs
+          raw_topics: rawTopics,   // original strings before normalization
+        },
+        unmatched_topics: unmatched,  // caller should surface to user
+      })
+    }
+
+    // --- Create / upsert SME profile ---
     const { full_name, email, title, domain, topics, exclusions, routing_preferences } = body
 
     if (!full_name || !email || !domain) {
@@ -19,7 +52,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Check if SME already exists
     const existing = await smeApi.getByEmail(email)
     if (existing) {
       return NextResponse.json({
@@ -29,7 +61,6 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Create new profile
     const profile = await smeApi.create({
       full_name,
       email,
@@ -59,7 +90,6 @@ export async function GET(req: NextRequest) {
   const email = req.nextUrl.searchParams.get('email')
 
   if (!email) {
-    // Return all SMEs (for admin/routing)
     const smes = await smeApi.getAll()
     return NextResponse.json({ smes })
   }

@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleUserQuery, generateEmbedding } from '@/lib/claude'
-import { kbApi, smeApi } from '@/lib/supabase'
+import { kbApi, smeApi, adminQueueApi } from '@/lib/supabase'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(req: NextRequest) {
@@ -32,7 +32,26 @@ export async function POST(req: NextRequest) {
     // Step 4: Let Claude decide what to do
     const result = await handleUserQuery(question, kbResults, allSMEs)
 
-    // Step 5: Query logging is planned for CI-2 (query_logs table not yet built)
+    // Step 5: Push unhandled queries to admin queue
+    if (result.action === 'routed_admin') {
+      try {
+        await adminQueueApi.create({
+          source: 'user_query',
+          signal_type: 'routed_admin',
+          payload: {
+            question,
+            session_id: sessionId,
+            kb_matches_found: kbResults.length,
+            highest_similarity: kbResults[0]?.similarity || 0
+          }
+        })
+      } catch (queueErr) {
+        // Non-fatal: log but don't fail the user request
+        console.error('Failed to enqueue admin signal:', queueErr)
+      }
+    }
+
+    // Step 6: Query logging is planned for CI-2 (query_logs table not yet built)
 
     return NextResponse.json({
       result,

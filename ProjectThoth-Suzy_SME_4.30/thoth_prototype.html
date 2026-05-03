@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Thoth - SME Journey Prototype v0.4</title>
+<style>
+  /* Color tokens */
+  :root {
+    --tm-magenta: #E20074;
+    --tm-magenta-dark: #B5005C;
+    --tm-magenta-light: #FCE6F1;
+    --wine: #5C1A2E;
+    --wine-dark: #3D0F1E;
+    --wine-light: #F5E6EA;
+    --beige: #F1EFE8;
+    --beige-dark: #E5E2D5;
+    --black: #000000;
+    --text-1: #1F1F1F;
+    --text-2: #6A6A6A;
+    --text-3: #9A9A9A;
+    --border: #E8E8E8;
+    --border-strong: #C7C7C7;
+    --success: #3B6D11;
+    --success-bg: #EAF3DE;
+    --warning: #854F0B;
+    --warning-bg: #FAEEDA;
+    --danger: #A32D2D;
+    --danger-bg: #FCEBEB;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #FAFAFA; color: var(--text-1);
+    line-height: 1.5; min-height: 100vh;
+  }
+  .app { max-width: 760px; margin: 0 auto; padding: 24px 20px 100px; }
+
+  .header { margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .header-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .brand-row { display: flex; align-items: baseline; gap: 10px; }
+  .brand { font-size: 22px; font-weight: 600; color: var(--black); letter-spacing: -0.5px; }
+  .sponsor-tag { font-size: 10px; color: var(--text-2); text-transform: uppercase; letter-spacing: 1px; }
+  .sponsor-tag b { color: var(--tm-magenta); font-weight: 600; }
+  .save-status { font-size: 12px; color: var(--text-2); display: flex; align-items: center; gap: 6px; }
+  .save-status .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: 0.4; } }
+
+  .stage-ribbon { display: flex; gap: 0; background: white; border: 1px solid var(--border); border-radius: 10px; padding: 4px; }
+  .stage-pill { flex: 1; padding: 8px 12px; border-radius: 6px; font-size: 12px; color: var(--text-2); text-align: center; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .stage-pill .ico { width: 18px; height: 18px; border-radius: 50%; background: var(--border); color: var(--text-2); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; }
+  .stage-pill.active { background: var(--wine); color: white; font-weight: 500; }
+  .stage-pill.active .ico { background: white; color: var(--wine); }
+  .stage-pill.done .ico { background: var(--success); color: white; }
+  .stage-pill.done { color: var(--text-1); }
+
+  .card { background: white; border-radius: 12px; padding: 28px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px; border: 1px solid var(--border); }
+  h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; color: var(--black); }
+  h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; color: var(--text-1); }
+  .subtitle { color: var(--text-2); font-size: 14px; margin-bottom: 20px; }
+  .stage-label { font-size: 11px; color: var(--wine); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 600; }
+
+  .hint-list { font-size: 13px; color: var(--text-2); background: var(--beige); padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; }
+  .hint-list li { list-style: none; padding: 2px 0; }
+
+  textarea, input { width: 100%; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 8px; font-family: inherit; font-size: 14px; background: white; resize: vertical; color: var(--text-1); }
+  textarea:focus, input:focus, select:focus { outline: none; border-color: var(--wine); box-shadow: 0 0 0 3px var(--wine-light); }
+  select {
+    width: 100%; padding: 10px 36px 10px 14px;
+    border: 1px solid var(--border-strong); border-radius: 8px;
+    font-family: inherit; font-size: 14px;
+    background: white; color: var(--text-1);
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%236A6A6A' d='M6 8L0 0h12z'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    background-size: 10px;
+  }
+
+  .btn { background: var(--tm-magenta); color: white; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn:hover { background: var(--tm-magenta-dark); }
+  .btn:active { transform: translateY(1px); }
+  .btn-secondary { background: white; color: var(--wine); border: 1px solid var(--wine); }
+  .btn-secondary:hover { background: var(--wine-light); }
+  .btn-tertiary { background: white; color: var(--text-2); border: 1px solid var(--border-strong); }
+  .btn-tertiary:hover { background: var(--beige); }
+  .btn-danger { background: white; color: var(--danger); border: 1px solid #F7C1C1; }
+  .btn-danger:hover { background: var(--danger-bg); }
+  .btn-success { background: var(--success); color: white; border: none; }
+  .btn-success:hover { background: #27500A; }
+  .btn-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .btn-small { padding: 6px 12px; font-size: 12px; }
+
+  .nav { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: white; border-radius: 24px; padding: 8px 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; gap: 8px; align-items: center; z-index: 100; border: 1px solid var(--border); }
+  .nav button { background: none; border: none; padding: 6px 14px; border-radius: 16px; cursor: pointer; font-size: 13px; color: var(--text-2); }
+  .nav button:disabled { opacity: 0.3; cursor: not-allowed; }
+  .nav button.primary { background: var(--tm-magenta); color: white; }
+  .nav button.primary:hover { background: var(--tm-magenta-dark); }
+  .nav .dots { display: flex; gap: 4px; margin: 0 8px; }
+  .nav .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border-strong); }
+  .nav .dot.active { background: var(--wine); }
+  .nav .dot.done { background: var(--success); }
+
+  .loading { text-align: center; padding: 40px; color: var(--text-2); }
+  .spinner { display: inline-block; width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--tm-magenta); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fallback-note { background: var(--warning-bg); border-left: 3px solid var(--warning); padding: 12px 16px; border-radius: 6px; font-size: 13px; color: var(--warning); margin-top: 16px; text-align: left; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .col-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-3); margin-bottom: 8px; font-weight: 600; }
+  .source-box { background: var(--beige); padding: 14px; border-radius: 8px; font-size: 13px; color: var(--text-1); white-space: pre-wrap; font-family: 'SF Mono', Monaco, monospace; line-height: 1.6; min-height: 120px; }
+  .field { margin-bottom: 14px; }
+  .field-label { font-size: 12px; font-weight: 500; color: var(--text-1); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .field-value { padding: 8px 12px; background: var(--beige); border-radius: 6px; font-size: 14px; }
+  .field-value.editable { border: 1px solid var(--border); background: white; }
+
+  .badge { padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  .badge-med { background: var(--warning-bg); color: var(--warning); }
+  .badge-low { background: var(--danger-bg); color: var(--danger); }
+
+  /* Topic add dropdown above the chip area, full width */
+  .topic-add-row { margin-bottom: 8px; }
+
+  .chip-area { padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: white; min-height: 44px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 8px 3px 6px;
+    background: var(--wine-light); color: var(--wine);
+    border-radius: 12px; font-size: 12px; margin: 3px 4px 3px 0;
+    border: 1px solid transparent; transition: background 0.15s;
+  }
+  .chip.primary { background: var(--wine); color: white; font-weight: 500; }
+  .chip-star { background: none; border: none; cursor: pointer; font-size: 12px; padding: 0; line-height: 1; color: var(--text-3); }
+  .chip.primary .chip-star { color: white; }
+  .chip-text { padding: 0 2px; }
+  .chip-x { background: none; border: none; cursor: pointer; font-size: 14px; padding: 0 0 2px 2px; line-height: 1; color: var(--text-2); display: none; margin-left: 2px; }
+  .chip:hover .chip-x { display: inline; }
+  .chip.primary:hover .chip-x { color: white; }
+
+  .chip.chip-add-inline {
+    background: white; border: 1px dashed var(--border-strong);
+    color: var(--text-2); cursor: pointer;
+    padding: 3px 12px; font-size: 14px; font-weight: 600;
+  }
+  .chip.chip-add-inline:hover { border-color: var(--wine); color: var(--wine); }
+  .chip-help { font-size: 11px; color: var(--text-2); margin-top: 8px; }
+
+  /* Chat container: beige throughout interview screens */
+  .chat-container { background: var(--beige); padding: 16px 18px; border-radius: 12px; margin-bottom: 16px; }
+  .chat-turn { margin-bottom: 14px; }
+  .chat-bot {
+    color: var(--text-1); padding: 4px 0 4px 12px; max-width: 92%;
+    font-size: 14px; border-left: 2px solid var(--wine);
+  }
+  .chat-bot strong { color: var(--wine); font-weight: 600; }
+  .chat-bot.followup { border-left-color: var(--text-3); }
+  .followup-quote { font-size: 11px; color: var(--text-2); font-style: italic; padding-bottom: 4px; margin-bottom: 4px; border-bottom: 1px dashed var(--border-strong); }
+  .chat-user {
+    background: white; color: var(--text-1);
+    padding: 12px 16px; border-radius: 12px 12px 2px 12px;
+    max-width: 85%; margin-left: auto; font-size: 14px;
+    border: 1px solid var(--border);
+  }
+  .skip-row { margin-top: 10px; display: flex; gap: 8px; font-size: 12px; color: var(--text-2); }
+  .skip-link { background: white; border: 1px solid var(--border-strong); color: var(--text-2); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+  .skip-link:hover { border-color: var(--wine); color: var(--wine); }
+
+  .interview-meta { padding: 10px 14px; background: var(--beige); border-radius: 8px; margin-bottom: 14px; font-size: 12px; color: var(--text-2); }
+  .turn-count { font-weight: 500; color: var(--text-1); }
+
+  /* Input toolbar above textarea: icons borderless, top-right */
+  .input-block { margin-top: 4px; }
+  .input-toolbar { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 6px; }
+  .icon-btn-bare {
+    background: none; border: none; cursor: pointer;
+    width: 32px; height: 32px; font-size: 18px;
+    color: var(--text-2);
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 6px;
+  }
+  .icon-btn-bare:hover { color: var(--wine); background: var(--wine-light); }
+
+  /* Routing rows: number on left, X top-right, arrows top-center / bottom-center (hover) */
+  .route-list { padding-top: 14px; padding-bottom: 14px; }
+  .route-item {
+    padding: 12px 14px; background: white;
+    border: 1px solid var(--border); border-radius: 8px;
+    margin: 12px 0;
+    display: flex; align-items: center; gap: 12px;
+    position: relative;
+  }
+  .route-item.first { background: var(--wine-light); border-color: var(--wine); }
+  .route-num {
+    background: var(--wine); color: white;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; flex-shrink: 0;
+  }
+  .route-item .label { flex: 1; font-size: 13px; }
+  .route-item .priority { font-size: 11px; color: var(--text-2); margin-right: 24px; }
+  .route-x {
+    position: absolute; top: 4px; right: 6px;
+    background: none; border: none; cursor: pointer;
+    width: 22px; height: 22px; border-radius: 50%;
+    font-size: 14px; color: var(--text-2);
+    visibility: hidden;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .route-item:hover .route-x { visibility: visible; }
+  .route-x:hover { background: var(--danger-bg); color: var(--danger); }
+  .route-arrow {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    background: white; border: 1px solid var(--border-strong);
+    width: 24px; height: 18px; border-radius: 4px;
+    cursor: pointer; font-size: 9px; color: var(--text-2);
+    visibility: hidden;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+  }
+  .route-arrow.up   { top: -10px; }
+  .route-arrow.down { bottom: -10px; }
+  .route-item:hover .route-arrow { visibility: visible; }
+  .route-item:first-child:hover .route-arrow.up   { visibility: hidden; }
+  .route-item:last-child:hover  .route-arrow.down { visibility: hidden; }
+  .route-arrow:hover { background: var(--beige); border-color: var(--wine); color: var(--wine); }
+
+  /* Boundary multi-select grid */
+  .subtopic-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .subtopic-check { padding: 8px 12px; background: white; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 8px; }
+  .subtopic-check:hover { border-color: var(--wine); }
+  .subtopic-check input { width: auto; }
+  .subtopic-check.checked { background: var(--danger-bg); border-color: #F7C1C1; }
+  .boundary-note { margin-top: 14px; padding: 10px 14px; background: var(--beige); border-radius: 6px; font-size: 12px; color: var(--text-2); border-left: 3px solid var(--wine); }
+
+  .file-pill { display: inline-flex; align-items: center; gap: 8px; background: var(--success-bg); color: var(--success); padding: 6px 12px; border-radius: 16px; font-size: 12px; margin: 8px 6px 0 0; }
+
+  /* Synthesis review cards */
+  .entry-card { border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 12px; background: white; }
+  .entry-card.editing { border-color: var(--wine); background: var(--wine-light); }
+  .entry-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 12px; }
+  .entry-meta { flex: 1; }
+  .entry-tags { margin-bottom: 6px; }
+  .entry-question { font-weight: 600; font-size: 15px; margin: 4px 0 8px; color: var(--text-1); }
+  .entry-answer { font-size: 13px; color: var(--text-1); line-height: 1.6; }
+  .entry-answer em { color: var(--wine); font-style: normal; font-weight: 500; }
+  .entry-meta-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; font-size: 11px; color: var(--text-2); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .status-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .status-pending { background: var(--warning-bg); color: var(--warning); }
+  .status-approved { background: var(--success-bg); color: var(--success); }
+  .status-route { background: #FFF8EE; color: var(--warning); border: 1px solid #F0DDB6; }
+
+  .entry-edit-mode { padding-top: 10px; }
+  .entry-edit-mode label { display: block; font-size: 11px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.4px; margin: 12px 0 6px; }
+  .entry-edit-mode textarea { font-size: 13px; }
+  .entry-attach-row { margin-top: 8px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: 6px; font-size: 12px; color: var(--text-2); display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+  /* Manual-add Q&A placeholder card (page 7) */
+  .entry-card-add {
+    border: 1.5px dashed var(--border-strong);
+    border-radius: 10px; padding: 20px; margin-bottom: 12px;
+    background: white; text-align: center; color: var(--text-2);
+    cursor: pointer; transition: all 0.15s;
+    font-size: 14px;
+  }
+  .entry-card-add:hover { border-color: var(--wine); color: var(--wine); background: var(--wine-light); }
+  .entry-card-add .plus { font-size: 22px; margin-right: 6px; vertical-align: middle; }
+
+  /* Transcript note */
+  .transcript-note { margin-top: 20px; padding: 10px 14px; background: var(--beige); border-radius: 6px; font-size: 12px; color: var(--text-2); display: flex; justify-content: space-between; align-items: center; border-left: 3px solid var(--text-3); }
+  .transcript-note button { background: white; border: 1px solid var(--border-strong); color: var(--text-1); padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .transcript-note button:hover { border-color: var(--wine); color: var(--wine); }
+  .transcript-body { margin-top: 10px; padding: 12px; background: white; border-radius: 6px; font-size: 12px; font-family: monospace; max-height: 220px; overflow: auto; white-space: pre-wrap; color: var(--text-1); border: 1px solid var(--border); }
+
+  .check-circle { width: 64px; height: 64px; background: var(--success-bg); border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 32px; color: var(--success); }
+  .next-steps-box { background: var(--beige); border-radius: 8px; padding: 16px 20px; max-width: 520px; margin: 0 auto 24px; text-align: left; font-size: 13px; }
+  .next-steps-box .header-line { font-weight: 600; margin-bottom: 8px; color: var(--text-1); }
+  .next-steps-box ul { color: var(--text-1); line-height: 1.8; list-style: none; }
+  .next-steps-box ul li::before { content: '* '; color: var(--wine); font-weight: 700; }
+  .next-steps-box .review-date { color: var(--wine); font-weight: 600; }
+
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="brand-row">
+          <span class="brand">Thoth</span>
+          <span class="sponsor-tag">A <b>T-Mobile</b> &times; GIX project</span>
+        </div>
+      </div>
+      <div class="save-status" id="saveStatus">
+        <span class="dot"></span>
+        <span id="saveText">Saved. You can leave anytime.</span>
+      </div>
+    </div>
+    <div class="stage-ribbon" id="stageRibbon"></div>
+  </div>
+
+  <div id="screenContainer"></div>
+</div>
+
+<div class="nav">
+  <button id="prevBtn" onclick="prevScreen()">&larr; Back</button>
+  <div class="dots" id="dots"></div>
+  <button id="nextBtn" class="primary" onclick="nextScreen()">Next &rarr;</button>
+</div>
+
+<script>
+
+const stages = [
+  { id: 'profile',   label: 'Profile',   ico: '1', screens: [0, 1, 2, 3] },
+  { id: 'interview', label: 'Interview', ico: '2', screens: [4, 5] },
+  { id: 'review',    label: 'Review',    ico: '3', screens: [6, 7] },
+];
+function stageOf(screenIdx) { return stages.findIndex(s => s.screens.includes(screenIdx)); }
+
+const NEXT_REVIEW_DATE = new Date(Date.now() + 90 * 86400000)
+  .toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+const TOPIC_CATALOG_CAREER_SERVICES = [
+  { id: 'cpt',                display: 'CPT (Curricular Practical Training)' },
+  { id: 'opt',                display: 'OPT (Optional Practical Training)' },
+  { id: 'i20',                display: 'I-20 Form' },
+  { id: 'visa',               display: 'Visa & Immigration' },
+  { id: 'international_student', display: 'International Student (general)' },
+  { id: 'internship',         display: 'Internship (general)' },
+  { id: 'techin_601',         display: 'TECHIN 601 Enrollment' },
+  { id: 'internship_search',  display: 'Internship Search' },
+  { id: 'offer_negotiation',  display: 'Offer & Negotiation' },
+  { id: 'career_coaching',    display: 'Career Coaching' },
+  { id: 'industry_networking', display: 'Industry Networking' },
+  { id: 'fee_waiver',         display: 'Fee Waiver / Payment Issues' },
+  { id: 'course_petitions',   display: 'MSTI Course Petitions' },
+  { id: 'transcripts',        display: 'Academic Transcripts' },
+];
+
+const screens = [
+
+  /* Screen 1: Entry. */
+  `
+  <div class="card">
+    <div class="stage-label">Step 1 . Tell me about yourself</div>
+    <h1>Welcome to Thoth</h1>
+    <p class="subtitle">I'll help you share your knowledge with GIX students, without filling out a 20-field form. Paste anything that describes your role and I'll figure out the rest.</p>
+
+    <h2>What can I read?</h2>
+    <div class="hint-list">
+      <li>* A relevant link (your GIX page, LinkedIn, portfolio, etc.)</li>
+      <li>* A job description</li>
+      <li>* Or just describe your role in a few sentences, etc.</li>
+    </div>
+    <textarea rows="4" placeholder="Paste a link or describe your role...">https://gix.uw.edu/about/people/patrick-chidsey/</textarea>
+    <div class="btn-row">
+      <button class="btn">Let Thoth figure it out &rarr;</button>
+    </div>
+  </div>
+  `,
+
+  /* Screen 2: Parsing + free-form fallback. */
+  `
+  <div class="card">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div style="font-size: 15px; color: var(--text-1); font-weight: 600; margin-bottom: 6px;">Reading your profile page...</div>
+      <div style="font-size: 13px; color: var(--text-2);">Extracting name, title, domain, and areas of expertise</div>
+      <div class="fallback-note">
+        <strong>Taking longer than usual?</strong>
+        <p style="margin-top: 6px; line-height: 1.5;">If I can't read your link (login wall, broken page, non-text content), switch to <strong>free-form mode</strong>: skip the auto-extract and describe your role yourself. You won't lose your place.</p>
+        <button class="btn-tertiary btn btn-small" style="margin-top: 10px;" onclick="alert('In a real run, this jumps straight to a blank role-description form.')">
+          Switch to free-form mode &rarr;
+        </button>
+      </div>
+    </div>
+  </div>
+  `,
+
+  /* Screen 3: Extraction review. Domain dropdown; topic dropdown ABOVE chip area; + chip inline. */
+  `
+  <div class="card">
+    <div class="stage-label">Step 2 . Review what I found</div>
+    <h1>Here's what I found</h1>
+    <p class="subtitle">Please review and correct anything I got wrong. Click a chip to set it as primary (star fills in). Hover a chip for the remove icon. Use the dropdown above the topics box to add more, or click the + chip inside the box.</p>
+
+    <div class="two-col">
+      <div>
+        <div class="col-label">What you gave me</div>
+        <div class="source-box">https://gix.uw.edu/about/people/patrick-chidsey/
+
+Patrick Chidsey
+Assistant Director, Career Services & Industry Engagement
+Global Innovation Exchange, University of Washington
+Email: chidsey@uw.edu
+Phone: 206-245-3105
+
+Patrick supports MSTI students with internship search, CPT applications, career coaching, and industry networking...</div>
+      </div>
+      <div>
+        <div class="col-label">What I extracted</div>
+        <div class="field">
+          <div class="field-label">Name</div>
+          <div class="field-value editable">Patrick Chidsey</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Title</div>
+          <div class="field-value editable">Assistant Director, Career Services &amp; Industry Engagement</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Email</div>
+          <div class="field-value editable">chidsey@uw.edu</div>
+        </div>
+        <div class="field">
+          <div class="field-label">Domain</div>
+          <select id="domainSelect">
+            <option value="career_services" selected>Career Services</option>
+            <option value="fab_lab">Fab Lab</option>
+            <option value="__new__">+ Add new domain...</option>
+          </select>
+        </div>
+        <div class="field">
+          <div class="field-label">Topics you cover</div>
+          <div class="topic-add-row">
+            <select id="topicAddSelect" onchange="addTopicFromDropdown(this, 'topicChipArea')">
+              <option value="">+ Add topic from catalog...</option>
+              ${TOPIC_CATALOG_CAREER_SERVICES.map(t => `<option value="${t.id}">${t.display}</option>`).join('')}
+              <option value="__new__">+ Create new topic...</option>
+            </select>
+          </div>
+          <div class="chip-area" id="topicChipArea">
+            ${chipHTML('cpt', 'CPT', true)}
+            ${chipHTML('internship_search', 'Internship Search', false)}
+            ${chipHTML('career_coaching', 'Career Coaching', false)}
+            ${chipHTML('industry_networking', 'Industry Networking', false)}
+            <span class="chip chip-add-inline" onclick="addTopicViaPrompt('topicChipArea')">+</span>
+          </div>
+          <div class="chip-help">A chip with a filled star is a <strong>primary</strong> topic (drives routing). You can mark more than one as primary.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-tertiary btn">Edit fields</button>
+      <button class="btn">Looks good, continue &rarr;</button>
+    </div>
+  </div>
+  `,
+
+  /* Screen 4: Boundaries multi-select + routing reorder (X top-right, arrows top/bottom center). */
+  `
+  <div class="card">
+    <div class="stage-label">Step 3 . Boundaries &amp; routing</div>
+    <h1>A few more questions</h1>
+    <p class="subtitle">This helps Thoth route students to you, and only to you, when it's actually your area.</p>
+
+    <h2 style="margin-top: 12px;">Inside Career Services, which sub-topics are NOT your responsibility?</h2>
+    <p style="font-size: 13px; color: var(--text-2); margin-bottom: 12px;">Multi-select anything outside your scope. Leave anything you DO own unchecked.</p>
+
+    <div class="subtopic-grid" id="subtopicGrid">
+      ${[
+        { id: 'cpt', label: 'CPT applications' },
+        { id: 'opt', label: 'OPT applications' },
+        { id: 'i20', label: 'I-20 status decisions', checked: true },
+        { id: 'visa', label: 'Visa / immigration questions' },
+        { id: 'techin_601', label: 'TECHIN 601 enrollment' },
+        { id: 'internship_search', label: 'Internship search & employers' },
+        { id: 'offer_negotiation', label: 'Offer evaluation & negotiation' },
+        { id: 'career_coaching', label: 'Career coaching / 1:1s' },
+        { id: 'industry_networking', label: 'Industry networking / events' },
+        { id: 'fee_waiver', label: 'Fee waivers / payment issues' },
+        { id: 'course_petitions', label: 'Course petitions & independent study', checked: true },
+        { id: 'transcripts', label: 'Academic transcript questions', checked: true },
+      ].map(s => `
+        <label class="subtopic-check ${s.checked ? 'checked' : ''}">
+          <input type="checkbox" ${s.checked ? 'checked' : ''} onchange="toggleSubtopic(this)">
+          <span>${s.label}</span>
+        </label>
+      `).join('')}
+    </div>
+
+    <div class="boundary-note">
+      <strong>Note:</strong> If you partly own a sub-topic, leave it unchecked here. The interview will follow up with boundary questions to clarify exactly what's yours.
+    </div>
+
+    <h2 style="margin-top: 28px;">When Thoth can't answer, how should it reach you?</h2>
+    <p style="font-size: 13px; color: var(--text-2); margin-bottom: 4px;">Hover a row for arrows (top + bottom) to reorder. The X in the corner removes a channel.</p>
+
+    <div class="route-list" id="routeList">
+      ${routeRowHTML(0, 'Teams message',           '1st choice')}
+      ${routeRowHTML(1, 'Email . chidsey@uw.edu',  'within 24h')}
+      ${routeRowHTML(2, 'Book 1:1 (scheduling link)', 'complex issues')}
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-tertiary btn">&larr; Back</button>
+      <button class="btn-tertiary btn">Save for later</button>
+      <button class="btn">Start the interview &rarr;</button>
+    </div>
+  </div>
+  `,
+
+  /* Screen 5: Interview. Beige chat container; voice/attach borderless above textarea, top-right. */
+  `
+  <div class="card">
+    <div class="stage-label">Step 4 . Knowledge interview</div>
+    <h1 style="margin-bottom: 4px;">Let's talk about your work</h1>
+    <p class="subtitle">I'll ask a few open-ended questions. Answer however you normally would. You can attach a file at any time using the icon above the message box.</p>
+
+    <div class="interview-meta">
+      <span class="turn-count">Question 1 of ~5</span>
+    </div>
+
+    <div class="chat-container">
+      <div class="chat-turn">
+        <div class="chat-bot">
+          <strong>Thoth</strong><br><br>
+          Walk me through what happens from the moment a student receives an internship offer to their first day of work. What are the steps students often miss or get wrong?
+        </div>
+      </div>
+      <div class="chat-turn">
+        <div class="chat-user">
+          The big one is TECHIN 601 enrollment. F-1 students need to be enrolled in it <em>during</em> their internship, not after. I give them the add code. Also they need to submit CPT via MyISSS at least 2 weeks before their start date, and people always underestimate that timeline. I tell them to negotiate their start date with that in mind.
+        </div>
+      </div>
+      <div class="chat-turn">
+        <div class="chat-bot">
+          <strong>Thoth</strong><br><br>
+          Got it. Do you have a document or email template you usually send when a student accepts an offer? If so, attach it using the paperclip icon below. I can use it to ground future answers.
+          <div class="skip-row">
+            <button class="skip-link">Skip for now, remind me later</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="input-block">
+      <div class="input-toolbar">
+        <button class="icon-btn-bare" title="Voice input">&#127908;</button>
+        <button class="icon-btn-bare" title="Attach a file">&#128206;</button>
+      </div>
+      <textarea rows="2" placeholder="Type your response..."></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn">Send</button>
+      <button class="btn-tertiary btn" style="margin-left: auto;">Save &amp; finish later</button>
+    </div>
+  </div>
+  `,
+
+  /* Screen 6: Follow-up + wrap-up. Same chat treatment. */
+  `
+  <div class="card">
+    <div class="stage-label">Step 4 . Knowledge interview</div>
+    <h1 style="margin-bottom: 4px;">Following up on what you shared</h1>
+    <p class="subtitle">A couple of follow-ups to tighten things up, then a quick wrap-up question.</p>
+
+    <div class="interview-meta">
+      <span class="turn-count">Question 4 of ~5</span>
+    </div>
+
+    <div class="chat-container">
+      <div class="chat-turn">
+        <div class="chat-bot">
+          <strong>Thoth</strong><br><br>
+          Thanks. I've received these:
+          <div style="margin-top: 8px;">
+            <span class="file-pill">&#128196; Internship Acceptance Checklist.pdf</span>
+            <span class="file-pill">&#128196; TECHIN 601 Syllabus.pdf</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="chat-turn">
+        <div class="chat-bot followup">
+          <div class="followup-quote">Following up on Q1: 'Walk me through what happens from offer to first day...'</div>
+          <strong>Thoth</strong><br><br>
+          Your checklist mentions a '$59/credit' fee for TECHIN 601. Is that still current? And should Thoth share it directly, or always route fee questions to you?
+        </div>
+      </div>
+      <div class="chat-turn">
+        <div class="chat-user">
+          Yes, still $59/credit as of this quarter. Thoth can share it, but if a student asks about fee waivers or payment issues, route to me, those are case-by-case.
+        </div>
+      </div>
+
+      <div class="chat-turn">
+        <div class="chat-bot">
+          <strong>Thoth</strong><br><br>
+          Perfect. Last question: is there anything else you'd like students to know about your area that I haven't asked about? Anything you find yourself saying over and over.
+        </div>
+      </div>
+    </div>
+
+    <div class="input-block">
+      <div class="input-toolbar">
+        <button class="icon-btn-bare" title="Voice input">&#127908;</button>
+        <button class="icon-btn-bare" title="Attach a file">&#128206;</button>
+      </div>
+      <textarea rows="2" placeholder="Type your response..."></textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn-tertiary btn">End interview</button>
+      <button class="btn">Send</button>
+    </div>
+  </div>
+  `,
+
+  /* Screen 7: Synthesis review + manual-add card + transcript note. */
+  `
+  <div class="card">
+    <div class="stage-label">Step 5 . Review &amp; approve</div>
+    <h1>Here's what I learned from you</h1>
+    <p class="subtitle">I've turned our conversation into 4 knowledge entries. Each is tagged with one or more <strong>primary topics</strong> (filled star) plus secondary topics. Approve, edit, or reject each one. Editing an approved entry reverts it to pending review.</p>
+
+    <div id="entryCards">
+      ${entryCardHTML({
+        idx: 0,
+        tags: [['cpt', 'CPT', true], ['i20', 'I-20', false], ['internship', 'Internship', false], ['international_student', 'International Student', false]],
+        question: 'When should F-1 students start their CPT application?',
+        answer: 'F-1 students should submit CPT via MyISSS at least <strong>2 weeks before</strong> their intended start date. They must first enroll in TECHIN 601 (a fee-based course at $59/credit) using an add code from Patrick Chidsey. Start dates should be negotiated with this timeline in mind.',
+        sources: ['Interview', 'Internship Acceptance Checklist.pdf'],
+        exposable: true,
+        status: 'pending',
+      })}
+      ${entryCardHTML({
+        idx: 1,
+        tags: [['techin_601', 'TECHIN 601', true], ['cpt', 'CPT', false], ['internship', 'Internship', false], ['international_student', 'International Student', false]],
+        question: 'What is TECHIN 601 and who needs it?',
+        answer: "TECHIN 601 is the enrollment course F-1 students must be registered in <em>while working</em> their internship, to comply with federal immigration regulations. Cost: $59/credit, paid via MyUW after registration.",
+        sources: ['Interview', 'TECHIN 601 Syllabus.pdf'],
+        exposable: true,
+        status: 'approved',
+      })}
+      ${entryCardHTML({
+        idx: 2,
+        tags: [['fee_waiver', 'Fee Waiver', true], ['techin_601', 'TECHIN 601', false], ['cpt', 'CPT', false]],
+        question: 'Can I get a fee waiver for TECHIN 601?',
+        answer: '<em>Route to Patrick Chidsey.</em> Fee waivers and payment issues are case-by-case and should not be answered directly.',
+        sources: ['Interview'],
+        exposable: false,
+        status: 'pending',
+      })}
+
+      <div class="entry-card-add" onclick="addManualEntry()">
+        <span class="plus">+</span> Add a Q&amp;A entry manually
+      </div>
+    </div>
+
+    <div class="transcript-note">
+      <span><strong>Raw interview transcript</strong> stored internally for audit. Never shown to students.</span>
+      <button onclick="toggleTranscript()">Review transcript</button>
+    </div>
+    <div id="transcriptBody" style="display: none;" class="transcript-body">[Q1 - Thoth] Walk me through what happens from the moment a student receives an internship offer to their first day of work...
+
+[A1 - Patrick] The big one is TECHIN 601 enrollment. F-1 students need to be enrolled in it during their internship, not after. I give them the add code. Also they need to submit CPT via MyISSS at least 2 weeks before their start date...
+
+[Q2 - Thoth] Do you have a document or email template you usually send when a student accepts an offer?
+[Uploads received: Internship Acceptance Checklist.pdf, TECHIN 601 Syllabus.pdf]
+
+[Q3 - Thoth] Your checklist mentions a '$59/credit' fee for TECHIN 601. Is that still current?
+[A3 - Patrick] Yes, still $59/credit as of this quarter. Thoth can share it, but if a student asks about fee waivers or payment issues, route to me, those are case-by-case.
+
+[Q4 - Thoth] Anything else you'd like students to know about your area?
+[A4 - Patrick] Students underestimate the 2-week minimum lead time on CPT and accept internship start dates without checking. They also enroll in TECHIN 601 LATE which technically violates F-1 status...</div>
+  </div>
+  `,
+
+  /* Screen 8: Final confirmation. Tightened copy + Revise profile button. */
+  `
+  <div class="card" style="text-align: center; padding: 48px 28px;">
+    <div class="check-circle">&check;</div>
+    <h1>You're all set, Patrick</h1>
+    <p class="subtitle" style="max-width: 520px; margin: 0 auto 24px;">3 of 4 entries are live in the GIX knowledge base. Students asking about CPT, TECHIN 601, or internship timelines now get grounded, cited answers from your materials.</p>
+
+    <div class="next-steps-box">
+      <div class="header-line">What happens next</div>
+      <ul>
+        <li>Thoth will prompt you to refresh these entries on <span class="review-date" id="reviewDate">${'<<DATE>>'}</span>.</li>
+        <li>Out-of-scope questions are routed automatically per your rules.</li>
+        <li>You can update or add entries anytime at <span style="color: var(--wine);">thoth.gix.uw.edu</span>.</li>
+      </ul>
+    </div>
+
+    <div class="btn-row" style="justify-content: center;">
+      <button class="btn-tertiary btn">Continue: review pending entries</button>
+      <button class="btn-secondary btn">Revise profile</button>
+      <button class="btn">Done for now</button>
+    </div>
+  </div>
+  `
+];
+
+/* Helpers used inside screen template strings */
+
+function chipHTML(id, text, primary) {
+  return `<span class="chip ${primary ? 'primary' : ''}" data-id="${id}">
+    <button class="chip-star" onclick="togglePrimary(this)">${primary ? '&#9733;' : '&#9734;'}</button>
+    <span class="chip-text">${text}</span>
+    <button class="chip-x" onclick="removeChip(this)">&times;</button>
+  </span>`;
+}
+
+function routeRowHTML(idx, label, priority) {
+  return `<div class="route-item ${idx === 0 ? 'first' : ''}">
+    <button class="route-arrow up"   onclick="moveRoute(${idx}, -1)">&#9650;</button>
+    <button class="route-arrow down" onclick="moveRoute(${idx}, 1)">&#9660;</button>
+    <button class="route-x" onclick="removeRouteRow(${idx})" title="Remove this channel">&times;</button>
+    <div class="route-num">${idx + 1}</div>
+    <span class="label">${label}</span>
+    <span class="priority">${priority}</span>
+  </div>`;
+}
+
+function entryCardHTML(e) {
+  const tagsHTML = e.tags.map(([id, label, primary]) => chipHTML(id, label, primary)).join('');
+  const statusBadge = e.status === 'approved'
+    ? '<span class="status-badge status-approved">Approved</span>'
+    : (!e.exposable
+        ? '<span class="status-badge status-route">Route only</span>'
+        : '<span class="status-badge status-pending">Pending review</span>');
+  const exposureRow = e.exposable
+    ? `<span>&#128065; Exposable to students</span>`
+    : `<span>&#128274; Internal only. Students see 'Connecting you with Patrick' instead.</span>`;
+  const sourceRow = e.sources.length
+    ? `<span>&#128196; Source: ${e.sources.map(s => s.endsWith('.pdf') ? `<em>${s}</em>` : s).join(' + ')}</span>`
+    : '';
+
+  const buttonsHTML = e.status === 'approved'
+    ? `<button class="btn-tertiary btn btn-small" onclick="toggleEdit(${e.idx})">Edit</button>
+       <button class="btn-danger btn btn-small">Reject</button>`
+    : `<button class="btn-tertiary btn btn-small" onclick="toggleEdit(${e.idx})">Edit</button>
+       <button class="btn-success btn btn-small" onclick="approveEntry(${e.idx})">&check; Approve</button>
+       <button class="btn-danger btn btn-small">Reject</button>`;
+
+  const editChipsHTML = e.tags.map(([id, label, primary]) => chipHTML(id, label, primary)).join('') +
+    `<span class="chip chip-add-inline" onclick="addTopicViaPrompt('entryTags-${e.idx}')">+</span>`;
+
+  return `<div class="entry-card" id="entryCard-${e.idx}" data-status="${e.status}">
+    <div class="entry-header">
+      <div class="entry-meta">
+        <div class="entry-tags">${tagsHTML}</div>
+        <div class="entry-question">${e.question}</div>
+      </div>
+      <div class="entry-status">${statusBadge}</div>
+    </div>
+    <div class="entry-answer">${e.answer}</div>
+    <div class="entry-meta-row">${sourceRow} ${exposureRow}</div>
+    <div class="btn-row">${buttonsHTML}</div>
+    <div class="entry-edit-mode" id="entryEdit-${e.idx}" style="display: none;">
+      <label>Topic tags (click star to mark primary, hover for x to remove, click + to add)</label>
+      <div class="topic-add-row">
+        <select onchange="addTopicFromDropdown(this, 'entryTags-${e.idx}')">
+          <option value="">+ Add topic from catalog...</option>
+          ${TOPIC_CATALOG_CAREER_SERVICES.map(t => `<option value="${t.id}">${t.display}</option>`).join('')}
+          <option value="__new__">+ Create new topic...</option>
+        </select>
+      </div>
+      <div class="chip-area" id="entryTags-${e.idx}">${editChipsHTML}</div>
+      <label>Synthesized answer</label>
+      <textarea rows="4">${e.answer.replace(/<[^>]+>/g, '').trim()}</textarea>
+      <label>Source files</label>
+      <div class="entry-attach-row">
+        ${e.sources.map(s => s.endsWith('.pdf')
+          ? `<span class="file-pill">&#128196; ${s} <button style="background:none;border:none;color:var(--success);cursor:pointer;font-size:14px;padding:0 0 0 4px;">&times;</button></span>`
+          : '').join('')}
+        <button class="btn-tertiary btn btn-small">+ Attach a new source</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn-tertiary btn btn-small" onclick="cancelEdit(${e.idx})">Cancel</button>
+        <button class="btn btn-small" onclick="saveEdit(${e.idx})">Save changes</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+let currentScreen = 0;
+
+function renderStageRibbon() {
+  const cur = stageOf(currentScreen);
+  const html = stages.map((s, i) => {
+    const cls = i < cur ? 'done' : (i === cur ? 'active' : '');
+    const ico = i < cur ? '&check;' : s.ico;
+    return `<div class="stage-pill ${cls}"><span class="ico">${ico}</span>${s.label}</div>`;
+  }).join('');
+  document.getElementById('stageRibbon').innerHTML = html;
+}
+
+function render() {
+  let html = screens[currentScreen];
+  if (currentScreen === 7) html = html.replace('<<DATE>>', NEXT_REVIEW_DATE);
+  document.getElementById('screenContainer').innerHTML = html;
+  document.getElementById('prevBtn').disabled = currentScreen === 0;
+  document.getElementById('nextBtn').disabled = currentScreen === screens.length - 1;
+  const dots = screens.map((_, i) => {
+    const cls = i === currentScreen ? 'active' : (i < currentScreen ? 'done' : '');
+    return `<div class="dot ${cls}"></div>`;
+  }).join('');
+  document.getElementById('dots').innerHTML = dots;
+  renderStageRibbon();
+  window.scrollTo(0, 0);
+  const saveText = document.getElementById('saveText');
+  saveText.textContent = 'Saving...';
+  setTimeout(() => { saveText.textContent = 'Saved. You can leave anytime.'; }, 500);
+}
+
+function nextScreen() { if (currentScreen < screens.length - 1) { currentScreen++; render(); } }
+function prevScreen() { if (currentScreen > 0)                  { currentScreen--; render(); } }
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight') nextScreen();
+  if (e.key === 'ArrowLeft')  prevScreen();
+});
+
+/* Chip interactions */
+function togglePrimary(btn) {
+  const chip = btn.closest('.chip');
+  const isPrimary = chip.classList.toggle('primary');
+  btn.innerHTML = isPrimary ? '&#9733;' : '&#9734;';
+  const card = chip.closest('.entry-card');
+  if (card) revertCardToPending(card.id.split('-')[1]);
+}
+function removeChip(btn) {
+  const chip = btn.closest('.chip');
+  const card = chip.closest('.entry-card');
+  chip.remove();
+  if (card) revertCardToPending(card.id.split('-')[1]);
+}
+
+function addTopicFromDropdown(sel, areaId) {
+  const v = sel.value;
+  if (!v) return;
+  if (v === '__new__') {
+    const t = prompt('Name a new topic (e.g., "Visa interview prep"):');
+    if (t && t.trim()) insertChipBeforePlus(areaId, slugify(t.trim()), t.trim());
+  } else {
+    const display = sel.options[sel.selectedIndex].text;
+    insertChipBeforePlus(areaId, v, display);
+  }
+  sel.value = '';
+  const card = document.getElementById(areaId).closest('.entry-card');
+  if (card) revertCardToPending(card.id.split('-')[1]);
+}
+function addTopicViaPrompt(areaId) {
+  const t = prompt('Topic name (or pick from the dropdown above):');
+  if (t && t.trim()) {
+    insertChipBeforePlus(areaId, slugify(t.trim()), t.trim());
+    const card = document.getElementById(areaId).closest('.entry-card');
+    if (card) revertCardToPending(card.id.split('-')[1]);
+  }
+}
+function insertChipBeforePlus(areaId, id, label) {
+  const area = document.getElementById(areaId);
+  const plus = area.querySelector('.chip-add-inline');
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = chipHTML(id, label, false);
+  const chip = wrapper.firstElementChild;
+  if (plus) area.insertBefore(chip, plus);
+  else area.appendChild(chip);
+}
+function slugify(s) { return s.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''); }
+
+/* Boundary multi-select */
+function toggleSubtopic(input) {
+  input.closest('.subtopic-check').classList.toggle('checked', input.checked);
+}
+
+/* Routing reorder + remove */
+function moveRoute(idx, dir) {
+  const list = document.getElementById('routeList');
+  if (!list) return;
+  const items = Array.from(list.children);
+  const target = idx + dir;
+  if (target < 0 || target >= items.length) return;
+  const ref = dir < 0 ? items[target] : items[target].nextSibling;
+  list.insertBefore(items[idx], ref);
+  rebindRouteRows();
+}
+function removeRouteRow(idx) {
+  const list = document.getElementById('routeList');
+  if (!list) return;
+  if (list.children.length <= 1) {
+    alert('You need at least one routing channel.');
+    return;
+  }
+  list.children[idx].remove();
+  rebindRouteRows();
+}
+function rebindRouteRows() {
+  const list = document.getElementById('routeList');
+  if (!list) return;
+  const labels = ['1st choice', 'within 24h', 'complex issues', 'fallback'];
+  Array.from(list.children).forEach((el, i) => {
+    el.classList.toggle('first', i === 0);
+    const num = el.querySelector('.route-num');     if (num) num.textContent = i + 1;
+    const p   = el.querySelector('.priority');      if (p)   p.textContent = labels[i] || '';
+    const up  = el.querySelector('.route-arrow.up');   if (up) up.setAttribute('onclick', `moveRoute(${i}, -1)`);
+    const dn  = el.querySelector('.route-arrow.down'); if (dn) dn.setAttribute('onclick', `moveRoute(${i}, 1)`);
+    const x   = el.querySelector('.route-x');       if (x)  x.setAttribute('onclick', `removeRouteRow(${i})`);
+  });
+}
+
+/* Q&A card edit / approve */
+function toggleEdit(idx) {
+  const editEl = document.getElementById('entryEdit-' + idx);
+  if (editEl.style.display === 'none') {
+    editEl.style.display = 'block';
+    document.getElementById('entryCard-' + idx).classList.add('editing');
+  } else {
+    cancelEdit(idx);
+  }
+}
+function cancelEdit(idx) {
+  document.getElementById('entryEdit-' + idx).style.display = 'none';
+  document.getElementById('entryCard-' + idx).classList.remove('editing');
+}
+function saveEdit(idx) {
+  cancelEdit(idx);
+  revertCardToPending(idx);
+  alert('Edit saved. Entry reverted to "Pending review" so you can re-approve.');
+}
+function revertCardToPending(idx) {
+  const card = document.getElementById('entryCard-' + idx);
+  if (!card) return;
+  if (card.dataset.status !== 'approved') return;
+  card.dataset.status = 'pending';
+  const badge = card.querySelector('.entry-status');
+  if (badge) badge.innerHTML = '<span class="status-badge status-pending">Pending review (edited)</span>';
+  const btnRow = card.querySelector(':scope > .btn-row');
+  if (btnRow) {
+    btnRow.innerHTML = `
+      <button class="btn-tertiary btn btn-small" onclick="toggleEdit(${idx})">Edit</button>
+      <button class="btn-success btn btn-small" onclick="approveEntry(${idx})">&check; Approve</button>
+      <button class="btn-danger btn btn-small">Reject</button>`;
+  }
+}
+function approveEntry(idx) {
+  const card = document.getElementById('entryCard-' + idx);
+  if (!card) return;
+  card.dataset.status = 'approved';
+  const badge = card.querySelector('.entry-status');
+  if (badge) badge.innerHTML = '<span class="status-badge status-approved">Approved</span>';
+  const btnRow = card.querySelector(':scope > .btn-row');
+  if (btnRow) {
+    btnRow.innerHTML = `
+      <button class="btn-tertiary btn btn-small" onclick="toggleEdit(${idx})">Edit</button>
+      <button class="btn-danger btn btn-small">Reject</button>`;
+  }
+}
+
+/* Manual-add Q&A (page 7) */
+function addManualEntry() {
+  const container = document.getElementById('entryCards');
+  const existing = container.querySelectorAll('.entry-card').length;
+  const newIdx = existing;
+  const html = entryCardHTML({
+    idx: newIdx,
+    tags: [],
+    question: '(New manual entry, click Edit to fill in)',
+    answer: '',
+    sources: [],
+    exposable: true,
+    status: 'pending',
+  });
+  const addBtn = container.querySelector('.entry-card-add');
+  if (addBtn) addBtn.insertAdjacentHTML('beforebegin', html);
+  else        container.insertAdjacentHTML('beforeend', html);
+  toggleEdit(newIdx);
+}
+
+/* Transcript collapse */
+function toggleTranscript() {
+  const body = document.getElementById('transcriptBody');
+  if (!body) return;
+  body.style.display = body.style.display === 'none' ? 'block' : 'none';
+}
+
+render();
+</script>
+</body>
+</html>

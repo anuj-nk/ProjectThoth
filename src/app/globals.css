@@ -3,8 +3,30 @@
 @tailwind utilities;
 
 :root {
+  /* Dark-app tokens (home, chat, admin) */
   --tmobile-pink: #e20074;
   --tmobile-dark: #0a0a0a;
+
+  /* Thoth design system — matches SME onboarding prototype */
+  --tm-magenta: #E20074;
+  --tm-magenta-dark: #B5005C;
+  --tm-magenta-light: #FCE6F1;
+  --wine: #5C1A2E;
+  --wine-dark: #3D0F1E;
+  --wine-light: #F5E6EA;
+  --beige: #F1EFE8;
+  --beige-dark: #E5E2D5;
+  --text-1: #1F1F1F;
+  --text-2: #6A6A6A;
+  --text-3: #9A9A9A;
+  --border: #E8E8E8;
+  --border-strong: #C7C7C7;
+  --success: #3B6D11;
+  --success-bg: #EAF3DE;
+  --warning: #854F0B;
+  --warning-bg: #FAEEDA;
+  --danger: #A32D2D;
+  --danger-bg: #FCEBEB;
 }
 
 * {
@@ -38,4 +60,8 @@ html, body {
 /* Subtle glass effect for cards */
 .bg-white\/8 {
   background-color: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }

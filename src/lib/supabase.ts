@@ -96,7 +96,7 @@ export const smeApi = {
 export const kbApi = {
   async create(entry: {
     sme_id: string
-    topic_tag: string
+    topic_tag: string | string[]
     question_framing: string
     synthesized_answer: string
     supporting_doc_ids?: any[]
@@ -163,14 +163,13 @@ export const kbApi = {
     return data || []
   },
 
-  // Admin publishes entry — triggers embedding generation
-  async publish(entry_id: string, approved_by_sme_id: string) {
+  // Admin publishes entry. SME approval already recorded approved_by_sme_id.
+  async publish(entry_id: string) {
     const next_review_due = new Date()
     next_review_due.setMonth(next_review_due.getMonth() + 6)
 
     return kbApi.update(entry_id, {
       status: 'approved',
-      approved_by_sme_id,
       approved_at: new Date().toISOString(),
       next_review_due: next_review_due.toISOString()
     })
@@ -289,6 +288,64 @@ export const transcriptApi = {
       .eq('transcript_id', transcript_id)
       .single()
     if (error) return null
+    return data
+  }
+}
+
+// ============================================
+// ADMIN QUEUE OPERATIONS (schema v0.3)
+// Receives every "system can't handle" signal
+// ============================================
+
+export const adminQueueApi = {
+  async create(entry: {
+    source: 'user_query' | 'sme_intake'
+    signal_type: string
+    payload: Record<string, any>
+  }) {
+    const { data, error } = await supabaseAdmin
+      .from('admin_queue')
+      .insert({ ...entry, status: 'pending' })
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async getPending() {
+    const { data, error } = await supabaseAdmin
+      .from('admin_queue')
+      .select('*')
+      .in('status', ['pending', 'in_review'])
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  async resolve(queue_id: string, resolution: string, resolved_by: string) {
+    const { data, error } = await supabaseAdmin
+      .from('admin_queue')
+      .update({
+        status: 'resolved',
+        resolution,
+        resolved_by,
+        resolved_at: new Date().toISOString()
+      })
+      .eq('queue_id', queue_id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async dismiss(queue_id: string) {
+    const { data, error } = await supabaseAdmin
+      .from('admin_queue')
+      .update({ status: 'dismissed' })
+      .eq('queue_id', queue_id)
+      .select()
+      .single()
+    if (error) throw error
     return data
   }
 }

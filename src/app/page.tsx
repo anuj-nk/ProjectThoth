@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import UserChat from '@/components/user/UserChat'
 import SMEOnboarding from '@/components/sme/SMEOnboarding'
 import AdminDashboard from '@/components/admin/AdminDashboard'
@@ -62,6 +63,15 @@ function RoleSelector({ onSelect }: { onSelect: (session: AppSession) => void })
   const [smeEmail, setSmeEmail] = useState('')
   const [showSMELogin, setShowSMELogin] = useState(false)
   const [error, setError] = useState('')
+  const [registered, setRegistered] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('registered=1')) {
+      setRegistered(true)
+      setShowSMELogin(true)
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
 
   const handleUserSelect = () => {
     onSelect({
@@ -158,6 +168,13 @@ function RoleSelector({ onSelect }: { onSelect: (session: AppSession) => void })
           </div>
         </button>
       </div>
+
+      {/* Post-registration banner */}
+      {registered && (
+        <div className="w-full max-w-sm mb-4 border border-emerald-500/30 bg-emerald-500/10 rounded-xl px-4 py-3">
+          <p className="text-emerald-400 text-sm">Profile created! Log in below with your email.</p>
+        </div>
+      )}
 
       {/* SME Login panel */}
       {showSMELogin && (

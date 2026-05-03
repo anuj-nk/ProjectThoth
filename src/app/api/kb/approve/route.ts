@@ -10,7 +10,7 @@ import { generateEmbedding } from '@/lib/claude'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { action, kb_entry_id, sme_id, approved_by, edits } = body
+    const { action, kb_entry_id, sme_id, edits } = body
 
     if (!kb_entry_id || !action) {
       return NextResponse.json(
@@ -45,10 +45,6 @@ export async function POST(req: NextRequest) {
 
     // --- Admin publishes entry → approved + embedding ---
     if (action === 'admin_approve') {
-      if (!approved_by) {
-        return NextResponse.json({ error: 'approved_by required' }, { status: 400 })
-      }
-
       const entry = await kbApi.getById(kb_entry_id)
       if (!entry || entry.status !== 'pending_review') {
         return NextResponse.json(
@@ -62,7 +58,7 @@ export async function POST(req: NextRequest) {
       const embedding = await generateEmbedding(textToEmbed)
       await kbApi.storeEmbedding(kb_entry_id, embedding)
 
-      const approvedEntry = await kbApi.publish(kb_entry_id, approved_by)
+      const approvedEntry = await kbApi.publish(kb_entry_id)
       return NextResponse.json({
         entry: approvedEntry,
         message: 'Entry approved and published to knowledge base.'

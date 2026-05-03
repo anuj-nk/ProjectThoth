@@ -49,7 +49,7 @@ export interface SMERow {
 export interface KBRow {
   entry_id: string
   sme_id: string
-  topic_tag: string
+  topic_tag: string | string[]
   question_framing: string
   synthesized_answer: string
   exposable_to_users: boolean
@@ -281,6 +281,17 @@ When all phases are complete, say EXACTLY:
 
 Start by greeting the SME and asking what topic they want to capture today.`
 
+function buildInterviewSystemPrompt(seedQuestions?: string): string {
+  if (!seedQuestions?.trim()) return SME_INTERVIEW_SYSTEM_PROMPT
+
+  return `${SME_INTERVIEW_SYSTEM_PROMPT}
+
+DOMAIN SEED QUESTION LIBRARY:
+Use these runtime-loaded seed questions as your interview guide. Do not ask every question. Pick the best next question based on the SME's prior answer, and ask one question at a time.
+
+${seedQuestions}`
+}
+
 // ============================================
 // PROMPT: KB ENTRY SYNTHESIZER (D1)
 // ============================================
@@ -324,7 +335,7 @@ ROUTING RULES:
 KNOWLEDGE BASE:
 ${kbResults.length > 0
     ? kbResults.map((e, i) =>
-      `[${i + 1}] topic: "${e.topic_tag}" (match: ${((e.similarity || 0) * 100).toFixed(0)}%)
+      `[${i + 1}] topic: "${Array.isArray(e.topic_tag) ? e.topic_tag.join(', ') : e.topic_tag}" (match: ${((e.similarity || 0) * 100).toFixed(0)}%)
 Q: ${e.question_framing}
 A: ${e.synthesized_answer}
 exposable: ${e.exposable_to_users}`
@@ -371,16 +382,17 @@ export async function extractProfile(rawInput: string): Promise<any> {
 
 export async function conductInterview(
   messages: InterviewMessage[],
-  smeInput: string
+  smeInput: string,
+  seedQuestions?: string
 ): Promise<string> {
   const history = messages.map(m => ({
     role: m.role === 'sme' ? 'user' as const : 'assistant' as const,
     content: m.content
   }))
-  const fullMessages = smeInput
-    ? [...history, { role: 'user' as const, content: smeInput }]
-    : [{ role: 'user' as const, content: 'Hello, ready to start.' }]
-  return callLLM(SME_INTERVIEW_SYSTEM_PROMPT, fullMessages, 400)
+  const fullMessages = history.length > 0
+    ? history
+    : [{ role: 'user' as const, content: smeInput || 'Hello, ready to start.' }]
+  return callLLM(buildInterviewSystemPrompt(seedQuestions), fullMessages, 400)
 }
 
 export async function synthesizeKBEntries(
@@ -424,8 +436,8 @@ export async function handleUserQuery(
     800
   )
 
-  const fallback = { action: 'routed_admin' as const, confidence_score: 0 }
-  const parsed = parseJSON(text, fallback)
+  const fallback: Record<string, any> = { action: 'routed_admin', confidence_score: 0 }
+  const parsed = parseJSON<Record<string, any>>(text, fallback)
   const validActions = ['answered', 'clarified', 'routed_sme', 'routed_admin']
   const action = validActions.includes(parsed.action) ? parsed.action : 'routed_admin'
 
@@ -446,10 +458,15 @@ export async function handleUserQuery(
     routing_reason: parsed.routing_reason,
     kb_entries_used: parsed.kb_entry_ids || [],
     confidence_score: parsed.confidence_score || 0,
-    sources: parsed.sources_used?.map((tag: string) => ({
-      topic_tag: tag,
-      exposable_to_users: kbResults.find(e => e.topic_tag === tag)?.exposable_to_users ?? false
-    }))
+    sources: parsed.sources_used?.map((tag: string) => {
+      const source = kbResults.find(e =>
+        Array.isArray(e.topic_tag) ? e.topic_tag.includes(tag) : e.topic_tag === tag
+      )
+      return {
+        topic_tag: tag,
+        exposable_to_users: source?.exposable_to_users ?? false
+      }
+    })
   }
 }
 
@@ -494,9 +511,9 @@ async function generateEmbeddingHuggingFace(text: string): Promise<number[]> {
       if (!response.ok) { console.log(`[HF] ${url} returned ${response.status}`); continue }
 
       const data = await response.json()
-      if (Array.isArray(data) && Array.isArray(data[0])) return data[0]
-      if (Array.isArray(data) && typeof data[0] === 'number') return data
-      if (data.embeddings) return data.embeddings[0]
+      if (Array.isArray(data) && Array.isArray(data[0])) return padEmbedding(data[0])
+      if (Array.isArray(data) && typeof data[0] === 'number') return padEmbedding(data)
+      if (data.embeddings) return padEmbedding(data.embeddings[0])
 
       console.log(`[HF] Unexpected shape from ${url}`)
     } catch (err: any) {
@@ -505,4 +522,10 @@ async function generateEmbeddingHuggingFace(text: string): Promise<number[]> {
   }
 
   throw new Error('HuggingFace embedding failed. Check your HUGGINGFACE_API_KEY.')
+}
+
+function padEmbedding(embedding: number[], dimensions: number = 1536): number[] {
+  if (embedding.length === dimensions) return embedding
+  if (embedding.length > dimensions) return embedding.slice(0, dimensions)
+  return [...embedding, ...Array(dimensions - embedding.length).fill(0)]
 }

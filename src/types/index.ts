@@ -37,7 +37,7 @@ export type KBStatus = 'draft' | 'pending_review' | 'approved' | 'rejected' | 's
 export interface KBEntry {
   entry_id: string
   sme_id: string
-  topic_tag: string
+  topic_tag: string[]   // primary topic at [0]; secondary tags at [1..n] (schema v0.2)
   question_framing: string
   synthesized_answer: string
   supporting_doc_ids: string[]
@@ -116,6 +116,26 @@ export interface QueryResult {
     topic_tag: string
     exposable_to_users: boolean
   }[]
+}
+
+// ============================================
+// Admin Queue (schema v0.3)
+// Receives every "system can't handle" signal
+// Sources: user_query (low-confidence) + sme_intake (unmatched topics)
+// ============================================
+export type AdminQueueStatus = 'pending' | 'in_review' | 'resolved' | 'needs_sme' | 'dismissed'
+export type AdminQueueSource = 'user_query' | 'sme_intake'
+
+export interface AdminQueueEntry {
+  queue_id: string
+  source: AdminQueueSource
+  signal_type: string           // e.g. 'low_confidence_query' | 'unmatched_topic' | 'routed_admin'
+  status: AdminQueueStatus
+  payload: Record<string, any>  // original query text, unmatched topic strings, etc.
+  resolution?: string
+  resolved_by?: string
+  created_at: string
+  resolved_at?: string
 }
 
 // query_logs table is planned for CI-2, not yet built

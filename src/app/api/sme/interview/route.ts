@@ -4,9 +4,21 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import fs from 'node:fs'
+import path from 'node:path'
+import yaml from 'js-yaml'
 import { conductInterview, synthesizeKBEntries } from '@/lib/claude'
-import { interviewApi, kbApi, transcriptApi } from '@/lib/supabase'
+import { interviewApi, kbApi, transcriptApi, smeApi } from '@/lib/supabase'
 import type { InterviewMessage } from '@/types'
+
+function loadSeedQuestions(domain: string = 'career_services'): string {
+  const fileName = `${domain}.yaml`
+  const seedPath = path.join(process.cwd(), 'src/data/seed_questions', fileName)
+  const fallbackPath = path.join(process.cwd(), 'src/data/seed_questions/career_services.yaml')
+  const raw = fs.readFileSync(fs.existsSync(seedPath) ? seedPath : fallbackPath, 'utf8')
+  const parsed = yaml.load(raw)
+  return yaml.dump(parsed)
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,9 +35,11 @@ export async function POST(req: NextRequest) {
       }
 
       const session = await interviewApi.create(sme_id)
+      const sme = await smeApi.getById(sme_id)
+      const seedQuestions = loadSeedQuestions(sme?.domain || 'career_services')
 
       // Get first question from Claude
-      const firstMessage = await conductInterview([], '')
+      const firstMessage = await conductInterview([], `We are capturing knowledge about "${topic}".`, seedQuestions)
 
       const messages: InterviewMessage[] = [{
         role: 'assistant',
@@ -35,7 +49,7 @@ export async function POST(req: NextRequest) {
 
       // Store topic in draft_profile; move to active stage
       await interviewApi.update(session.session_id, {
-        draft_profile: { topic },
+        draft_profile: { topic, seed_questions: seedQuestions },
         stage: 'interview_active',
         message_history: messages
       })
@@ -70,7 +84,8 @@ export async function POST(req: NextRequest) {
         }
       ]
 
-      const assistantResponse = await conductInterview(updatedMessages, message)
+      const seedQuestions = (session.draft_profile as any)?.seed_questions || loadSeedQuestions()
+      const assistantResponse = await conductInterview(updatedMessages, '', seedQuestions)
 
       const isComplete = assistantResponse.toLowerCase().includes('let me prepare a summary')
         || assistantResponse.toLowerCase().includes('solid understanding')
@@ -120,11 +135,12 @@ export async function POST(req: NextRequest) {
       const synthesized = await synthesizeKBEntries(messageHistory, topic)
 
       // Create each KB entry as a draft
+      // LLM returns topic_tag as string; schema v0.2 stores TEXT[] (primary at [0])
       const createdEntries = await Promise.all(
         synthesized.map(entry =>
           kbApi.create({
             sme_id,
-            topic_tag: entry.topic_tag,
+            topic_tag: Array.isArray(entry.topic_tag) ? entry.topic_tag : [entry.topic_tag],
             question_framing: entry.question_framing,
             synthesized_answer: entry.synthesized_answer,
             exposable_to_users: entry.exposable_to_users,

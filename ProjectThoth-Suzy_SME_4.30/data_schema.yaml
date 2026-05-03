@@ -1,0 +1,585 @@
+# Thoth Data Schema — SME Journey
+# Version: 0.3  (2026-04-30)
+# Author: SME Journey owner
+#
+# CHANGELOG
+# ─────────
+# v0.3 (2026-04-30)
+#   * + admin_queue table — receives every "system can't handle this"
+#       signal, with a 5-state lifecycle (pending / in_review / resolved
+#       / needs_sme / dismissed). Two sources feed it:
+#         (a) `route_admin` decisions from langgraph_user_query.py
+#         (b) `unmatched_topics` from langgraph_sme_intake.persist_node
+#       Closes the demo loop on PRD success criterion #7 (admin fallback).
+#   * Existing v0.2 deployments: run `migrations/002_admin_queue.sql`.
+#
+# v0.2 (2026-04-30)
+#   * knowledge_entries.topic_tag: TEXT → TEXT[] (multi-tag support)
+#       — primary topic at index [0] drives routing; [1..n] are secondary tags
+#         used to expand recall (PRD success criterion #6: overlap handling).
+#   * knowledge_entries: + search_tsv (generated tsvector, English) for
+#       hybrid keyword + vector retrieval (RRF fusion in app code).
+#   * Vector index: ivfflat → HNSW (better recall on PoC-scale data).
+#   * GIN index added on topic_tag (array containment) and search_tsv.
+#   * domain CHECK constraint relaxed to a single value list ('career_services')
+#       for the PoC; other domain ids remain reserved for future cohorts.
+#   * Topic vocabulary moved out of this file into `topic_taxonomy.yaml`
+#       (controlled list of topic_id, aliases, parent_id, owner_sme_id, exposable).
+#       PoC stores it as YAML; production will promote it to a `topic_taxonomy` table.
+#   * Existing v0.1 deployments: run `migrations/001_topic_tag_array.sql`.
+#
+# v0.1 (2026-04-25): initial schema (4 tables, single topic_tag string).
+#
+# ─────────────────────────────────────────────────────────────
+# WHAT "BUILDING A TABLE" MEANS
+# ─────────────────────────────────────────────────────────────
+# A database table is like a spreadsheet:
+#   - Columns = fields (e.g., name, email, domain)
+#   - Rows    = records (e.g., one row per SME)
+# "Building a table" = telling the database what columns exist,
+#   what type each column is, and which columns link to other tables.
+#
+# We have 4 tables for the SME journey:
+#   sme_profiles, knowledge_entries, raw_transcripts, interview_sessions.
+
+# ─────────────────────────────────────────────────────────────
+# TABLE 1: sme_profiles
+# ─────────────────────────────────────────────────────────────
+# Purpose: One row per SME. This is routing metadata — who owns what.
+# Populated by: Screens 3-4 of the prototype (extraction + exclusions).
+# Used for: When a student asks a question, Thoth queries this table
+#           to figure out WHO to route to.
+
+table: sme_profiles
+description: "One row per SME. Routing metadata — who owns what."
+
+fields:
+  - name: sme_id
+    type: UUID
+    required: yes
+    primary_key: yes
+    note: "Unique ID, auto-generated when SME is onboarded"
+
+  - name: full_name
+    type: TEXT
+    required: yes
+    example: "Patrick Chidsey"
+
+  - name: email
+    type: TEXT
+    required: yes
+    unique: yes
+    example: "chidsey@uw.edu"
+
+  - name: title
+    type: TEXT
+    required: no
+    example: "Assistant Director, Career Services & Industry Engagement"
+
+  - name: domain
+    type: TEXT (enum-like)
+    required: yes
+    allowed_values_v0_2: [career_services]
+    allowed_values_reserved:
+      [academics, facilities, prototyping_lab, admissions,
+       it_purchasing, student_wellbeing, other]
+    note: |
+      v0.2 PoC uses only `career_services`. Other ids reserved for
+      future cohorts. Extend the CHECK constraint when you add a domain.
+
+  - name: topics
+    type: JSONB (array of strings — taxonomy topic_ids)
+    required: yes
+    example: ["course_petitions", "transcripts"]
+    note: |
+      Each value MUST exist as a topic_id in `topic_taxonomy.yaml`.
+      Validation runs in application code (no FK to a table in PoC).
+
+  - name: exclusions
+    type: JSONB (array of strings — taxonomy topic_ids)
+    required: no
+    example: ["i20", "course_petitions"]
+    note: "Topics adjacent to this SME but explicitly NOT theirs. Drives routing-out."
+
+  - name: routing_preferences
+    type: JSONB (array of objects, ordered)
+    required: yes
+    example: |
+      [
+        { "channel": "teams", "priority": 1 },
+        { "channel": "email", "priority": 2, "sla_hours": 24 },
+        { "channel": "booking_link", "priority": 3, "url": "https://..." }
+      ]
+
+  - name: availability
+    type: TEXT
+    required: no
+    example: "M-F 10am-4:30pm, by appointment"
+
+  - name: profile_source_input
+    type: TEXT
+    required: no
+    note: "What the SME pasted originally. Debugging only — never shown to end users."
+
+  - name: created_at
+    type: TIMESTAMPTZ
+    auto: yes
+
+  - name: last_reviewed_at
+    type: TIMESTAMPTZ
+    required: no
+
+  - name: next_review_due
+    type: TIMESTAMPTZ
+    required: no
+    note: "Auto-set to ~90 days out. Triggers re-interview prompt."
+
+
+# ─────────────────────────────────────────────────────────────
+# TABLE 2: knowledge_entries
+# ─────────────────────────────────────────────────────────────
+# Purpose: One row per approved Q&A entry. This is what students hit.
+# Populated by: Screen 7 of the prototype (synthesis + approval).
+# Used for: hybrid retrieval (SQL filter + tsvector keyword + pgvector cosine,
+#           fused via RRF in `langgraph_user_query.py`).
+
+table: knowledge_entries
+description: "One row per approved Q&A entry."
+
+fields:
+  - name: entry_id
+    type: UUID
+    required: yes
+    primary_key: yes
+
+  - name: sme_id
+    type: UUID (FK → sme_profiles.sme_id)
+    required: yes
+
+  - name: topic_tag
+    type: TEXT[]                            # CHANGED in v0.2 — was TEXT
+    required: yes
+    example: ["cpt", "i20", "internship", "international_student"]
+    note: |
+      Multi-tag (P0). Index [0] is the PRIMARY topic — drives routing
+      ownership. Indexes [1..n] are SECONDARY — expand recall and let
+      a single entry surface from multiple search angles.
+      All values must exist in topic_taxonomy.yaml.
+
+  - name: question_framing
+    type: TEXT
+    required: yes
+    example: "When should an F-1 student start their CPT application?"
+
+  - name: synthesized_answer
+    type: TEXT
+    required: no                            # CHANGED in v0.2 — null = route-only
+    note: |
+      NULL is allowed for route-only entries (e.g., fee_waiver) where the
+      retrieval system should match the question but force routing instead
+      of generating an answer. Pair NULL with exposable_to_users=false.
+
+  - name: supporting_doc_ids
+    type: JSONB (array of UUIDs)
+    required: no
+
+  - name: exposable_to_users
+    type: BOOLEAN
+    required: yes
+    default: true
+    note: |
+      false → Thoth NEVER answers this directly; always routes to the SME.
+      Use false for case-by-case topics (fee waivers, individual policy calls).
+
+  - name: raw_transcript_id
+    type: UUID (FK → raw_transcripts.transcript_id)
+    required: no
+
+  - name: embedding
+    type: VECTOR(1536)
+    required: no
+    note: |
+      Backfilled by scripts/backfill_embeddings.py after row insert.
+      Generated from question_framing + synthesized_answer.
+      Requires pgvector extension.
+
+  - name: search_tsv                        # NEW in v0.2
+    type: TSVECTOR (generated, STORED)
+    required: yes
+    note: |
+      Auto-computed from question_framing (weight A) + synthesized_answer
+      (weight B), using English text-search config. Backed by GIN index.
+      Used by the hybrid retrieval keyword path.
+
+  - name: status
+    type: TEXT (enum-like)
+    required: yes
+    allowed_values: [draft, pending_review, approved, rejected, stale]
+    default: draft
+
+  - name: approved_by_sme_id
+    type: UUID (FK → sme_profiles.sme_id)
+    required: no
+
+  - name: approved_at
+    type: TIMESTAMPTZ
+    required: no
+
+  - name: next_review_due
+    type: TIMESTAMPTZ
+    required: no
+
+  - name: created_at
+    type: TIMESTAMPTZ
+    auto: yes
+
+
+# ─────────────────────────────────────────────────────────────
+# TABLE 3: raw_transcripts
+# ─────────────────────────────────────────────────────────────
+# Purpose: Full interview conversation. Internal only — never shown.
+# Populated by: Screens 5-6 (during interview).
+
+table: raw_transcripts
+description: "Full interview transcripts. Internal only."
+
+fields:
+  - name: transcript_id
+    type: UUID
+    required: yes
+    primary_key: yes
+
+  - name: sme_id
+    type: UUID (FK → sme_profiles.sme_id)
+    required: yes
+
+  - name: session_id
+    type: UUID (FK → interview_sessions.session_id)
+    required: yes
+
+  - name: messages
+    type: JSONB (array of objects)
+    required: yes
+    example: |
+      [
+        { "role": "thoth", "content": "Walk me through...", "timestamp": "..." },
+        { "role": "sme",   "content": "The big one is TECHIN 601...", "timestamp": "..." }
+      ]
+
+  - name: uploaded_doc_ids
+    type: JSONB (array of UUIDs)
+    required: no
+
+  - name: synthesized_entry_ids
+    type: JSONB (array of UUIDs)
+    required: no
+
+  - name: created_at
+    type: TIMESTAMPTZ
+    auto: yes
+
+
+# ─────────────────────────────────────────────────────────────
+# TABLE 4: interview_sessions
+# ─────────────────────────────────────────────────────────────
+# Purpose: Tracks the SME's progress through the multi-step flow.
+#          Pairs with LangGraph's PostgresSaver for resume-mid-interview.
+
+table: interview_sessions
+description: "Tracks the SME's progress through the intake flow."
+
+fields:
+  - name: session_id
+    type: UUID
+    required: yes
+    primary_key: yes
+
+  - name: sme_id
+    type: UUID (FK → sme_profiles.sme_id)
+    required: no
+    note: "Null until the profile is created in Screen 3"
+
+  - name: stage
+    type: TEXT (enum-like)
+    required: yes
+    allowed_values:
+      - input_received         # Screen 1
+      - extracting             # Screen 2
+      - profile_review         # Screen 3
+      - boundaries_routing     # Screen 4
+      - interview_active       # Screens 5-6
+      - synthesis_review       # Screen 7
+      - completed              # Screen 8
+
+  - name: message_history
+    type: JSONB (array of objects)
+    required: no
+
+  - name: draft_profile
+    type: JSONB
+    required: no
+
+  - name: draft_entries
+    type: JSONB (array of objects)
+    required: no
+
+  - name: created_at
+    type: TIMESTAMPTZ
+    auto: yes
+
+  - name: updated_at
+    type: TIMESTAMPTZ
+    auto: yes
+
+
+# ─────────────────────────────────────────────────────────────
+# TABLE 5: admin_queue   (v0.3)
+# ─────────────────────────────────────────────────────────────
+# Purpose: Catch every "system can't handle this" signal so admin has
+#          visibility instead of dropped logs.
+# Populated by:
+#   (a) langgraph_user_query.route_admin_node — when a student query
+#       has no matching SME (source='user_query')
+#   (b) langgraph_sme_intake.persist_node — when an SME mentioned a
+#       topic that didn't normalize to taxonomy (source='sme_intake')
+
+table: admin_queue
+description: "Admin inbox. Every route_admin event and every unmatched_topic lands here."
+
+fields:
+  - name: queue_id
+    type: UUID
+    required: yes
+    primary_key: yes
+
+  - name: source
+    type: TEXT (enum-like)
+    required: yes
+    allowed_values: [user_query, sme_intake]
+
+  - name: status
+    type: TEXT (enum-like)
+    required: yes
+    default: pending
+    allowed_values: [pending, in_review, resolved, needs_sme, dismissed]
+    note: |
+      Lifecycle:
+        pending   → just arrived
+        in_review → admin is looking at it
+        resolved  → admin assigned it (existing SME / topic)
+        needs_sme → admin decided a new SME must be onboarded
+        dismissed → admin marked out-of-scope
+
+  - name: user_query
+    type: TEXT
+    required: no
+    note: "Original student query (when source='user_query')."
+
+  - name: user_id
+    type: TEXT
+    required: no
+
+  - name: matched_topic_ids
+    type: TEXT[]
+    required: no
+    note: "Topic IDs the query DID hit, if any. Empty array = total miss."
+
+  - name: unmatched_topic_text
+    type: TEXT
+    required: no
+    note: "Free-text topic the SME mentioned (when source='sme_intake')."
+
+  - name: source_sme_id
+    type: UUID (FK → sme_profiles.sme_id)
+    required: no
+
+  - name: source_session_id
+    type: UUID (FK → interview_sessions.session_id)
+    required: no
+
+  - name: resolution_note
+    type: TEXT
+    required: no
+
+  - name: resolved_to_topic_id
+    type: TEXT
+    required: no
+    note: "If 'add to existing topic' — points to a taxonomy topic_id."
+
+  - name: resolved_to_sme_id
+    type: UUID (FK → sme_profiles.sme_id)
+    required: no
+
+  - name: resolved_by
+    type: TEXT
+    required: no
+    note: "Admin email/id that actioned this item."
+
+  - name: resolved_at
+    type: TIMESTAMPTZ
+    required: no
+
+  - name: created_at
+    type: TIMESTAMPTZ
+    auto: yes
+
+
+# ─────────────────────────────────────────────────────────────
+# RELATIONSHIPS
+# ─────────────────────────────────────────────────────────────
+#   interview_sessions ──(sme_id)──► sme_profiles
+#                                         │
+#                                         │ (sme_id, approved_by_sme_id)
+#                                         ▼
+#                                   knowledge_entries
+#                                         │
+#                                         │ (raw_transcript_id)
+#                                         ▼
+#                                    raw_transcripts ◄──(session_id)── interview_sessions
+#
+#                                    admin_queue
+#                                       │
+#                                       ├── (source_sme_id)         ──► sme_profiles
+#                                       ├── (source_session_id)     ──► interview_sessions
+#                                       ├── (resolved_to_sme_id)    ──► sme_profiles
+#                                       └── (resolved_to_topic_id)  ──► topic_taxonomy.yaml (string match)
+#
+# Data flow:
+#   1. Open prototype → INSERT interview_sessions (stage=input_received)
+#   2. Profile approved (Screen 3-4) → INSERT/UPDATE sme_profiles, set sme_id on session
+#   3. Interview turns → APPEND to interview_sessions.message_history
+#   4. Synthesis approved (Screen 7) → INSERT raw_transcripts + INSERT knowledge_entries
+#                                    + INSERT admin_queue (one row per unmatched_topic, if any)
+#   5. Screen 8 → UPDATE interview_sessions SET stage='completed'
+#   6. Student asks a question → langgraph_user_query
+#        ├─ answer / clarify / route_sme → return to student
+#        └─ route_admin → INSERT admin_queue (source='user_query')
+#   7. Admin reviews queue → UPDATE admin_queue (status, resolution_note, resolved_to_*)
+
+
+# ─────────────────────────────────────────────────────────────
+# RUNNABLE SQL (canonical v0.2 — for FRESH installs)
+# Existing v0.1 deployments: run migrations/001_topic_tag_array.sql instead.
+# ─────────────────────────────────────────────────────────────
+
+sql: |
+  -- Extensions
+  CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+  CREATE EXTENSION IF NOT EXISTS vector;
+
+  -- ── Table 1: SME profiles ────────────────────────────
+  CREATE TABLE sme_profiles (
+    sme_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    full_name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    title TEXT,
+    domain TEXT NOT NULL CHECK (domain IN ('career_services')),  -- v0.2 PoC: extend as needed
+    topics JSONB NOT NULL DEFAULT '[]'::jsonb,
+    exclusions JSONB DEFAULT '[]'::jsonb,
+    routing_preferences JSONB NOT NULL DEFAULT '[]'::jsonb,
+    availability TEXT,
+    profile_source_input TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_reviewed_at TIMESTAMPTZ,
+    next_review_due TIMESTAMPTZ
+  );
+
+  -- ── Table 4: Interview sessions (declared early for FK) ──
+  CREATE TABLE interview_sessions (
+    session_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sme_id UUID REFERENCES sme_profiles(sme_id) ON DELETE CASCADE,
+    stage TEXT NOT NULL CHECK (stage IN (
+      'input_received', 'extracting', 'profile_review', 'boundaries_routing',
+      'interview_active', 'synthesis_review', 'completed'
+    )),
+    message_history JSONB DEFAULT '[]'::jsonb,
+    draft_profile JSONB,
+    draft_entries JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- ── Table 3: Raw transcripts ─────────────────────────
+  CREATE TABLE raw_transcripts (
+    transcript_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sme_id UUID NOT NULL REFERENCES sme_profiles(sme_id) ON DELETE CASCADE,
+    session_id UUID NOT NULL REFERENCES interview_sessions(session_id) ON DELETE CASCADE,
+    messages JSONB NOT NULL,
+    uploaded_doc_ids JSONB DEFAULT '[]'::jsonb,
+    synthesized_entry_ids JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- ── Table 2: Knowledge entries (v0.2: topic_tag is text[], + search_tsv) ──
+  CREATE TABLE knowledge_entries (
+    entry_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    sme_id UUID NOT NULL REFERENCES sme_profiles(sme_id) ON DELETE CASCADE,
+    topic_tag TEXT[] NOT NULL DEFAULT '{}',                 -- v0.2 multi-tag
+    question_framing TEXT NOT NULL,
+    synthesized_answer TEXT,                                 -- v0.2: nullable for route-only
+    supporting_doc_ids JSONB DEFAULT '[]'::jsonb,
+    exposable_to_users BOOLEAN NOT NULL DEFAULT TRUE,
+    raw_transcript_id UUID REFERENCES raw_transcripts(transcript_id) ON DELETE SET NULL,
+    embedding VECTOR(1536),
+    search_tsv TSVECTOR GENERATED ALWAYS AS (
+      setweight(to_tsvector('english', coalesce(question_framing, '')), 'A') ||
+      setweight(to_tsvector('english', coalesce(synthesized_answer, '')), 'B')
+    ) STORED,                                                -- v0.2 hybrid keyword path
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN (
+      'draft', 'pending_review', 'approved', 'rejected', 'stale'
+    )),
+    approved_by_sme_id UUID REFERENCES sme_profiles(sme_id),
+    approved_at TIMESTAMPTZ,
+    next_review_due TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- ── Table 5: admin_queue (v0.3) ──────────────────────
+  CREATE TABLE admin_queue (
+    queue_id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    source               TEXT NOT NULL CHECK (source IN ('user_query', 'sme_intake')),
+    status               TEXT NOT NULL DEFAULT 'pending' CHECK (status IN (
+      'pending', 'in_review', 'resolved', 'needs_sme', 'dismissed'
+    )),
+    user_query           TEXT,
+    user_id              TEXT,
+    matched_topic_ids    TEXT[],
+    unmatched_topic_text TEXT,
+    source_sme_id        UUID REFERENCES sme_profiles(sme_id) ON DELETE SET NULL,
+    source_session_id    UUID REFERENCES interview_sessions(session_id) ON DELETE SET NULL,
+    resolution_note      TEXT,
+    resolved_to_topic_id TEXT,
+    resolved_to_sme_id   UUID REFERENCES sme_profiles(sme_id) ON DELETE SET NULL,
+    resolved_by          TEXT,
+    resolved_at          TIMESTAMPTZ,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  );
+
+  -- ── Indexes ──────────────────────────────────────────
+  CREATE INDEX idx_sme_domain        ON sme_profiles(domain);
+  CREATE INDEX idx_entries_sme       ON knowledge_entries(sme_id);
+  CREATE INDEX idx_entries_status    ON knowledge_entries(status);
+  CREATE INDEX idx_entries_topic     ON knowledge_entries USING GIN (topic_tag);   -- v0.2
+  CREATE INDEX idx_entries_search    ON knowledge_entries USING GIN (search_tsv);  -- v0.2
+  CREATE INDEX idx_entries_embedding ON knowledge_entries USING HNSW (embedding vector_cosine_ops);  -- v0.2
+  CREATE INDEX idx_sessions_stage    ON interview_sessions(stage);
+  CREATE INDEX idx_admin_queue_status  ON admin_queue(status);                     -- v0.3
+  CREATE INDEX idx_admin_queue_source  ON admin_queue(source);                     -- v0.3
+  CREATE INDEX idx_admin_queue_created ON admin_queue(created_at DESC);            -- v0.3
+
+
+# ─────────────────────────────────────────────────────────────
+# WHAT YOUR TEAMMATE NEEDS TO DO
+# ─────────────────────────────────────────────────────────────
+# FRESH install:
+#   1. Create a Supabase project (if not already).
+#   2. Supabase dashboard → SQL Editor → New query.
+#   3. Paste the `sql:` block above and Run.
+#   4. Verify the 4 tables in Supabase → Table Editor.
+#   5. Run `seed_knowledge_entries.sql` to load Patrick + Jason data.
+#   6. Run `python scripts/backfill_embeddings.py` to populate embeddings.
+#
+# UPGRADING from v0.1 (already deployed):
+#   1. Supabase → SQL Editor → paste `migrations/001_topic_tag_array.sql` → Run.
+#   2. Re-load seed data if topic_tag values were single strings.
+#   3. Run backfill_embeddings.py only for rows where embedding IS NULL.
