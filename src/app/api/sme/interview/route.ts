@@ -23,7 +23,7 @@ function loadSeedQuestions(domain: string = 'career_services'): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { action, sme_id, topic, interview_id, message } = body
+    const { action, sme_id, topic, interview_id, message, uploaded_doc_ids } = body
 
     // --- Start a new interview ---
     if (action === 'start') {
@@ -129,7 +129,8 @@ export async function POST(req: NextRequest) {
       const messageHistory: InterviewMessage[] = session.message_history || []
 
       // Save raw transcript (never exposed to end users)
-      const transcript = await transcriptApi.create(sme_id, interview_id, messageHistory)
+      const docIds: string[] = Array.isArray(uploaded_doc_ids) ? uploaded_doc_ids : []
+      const transcript = await transcriptApi.create(sme_id, interview_id, messageHistory, docIds)
 
       // Synthesize — returns array of 4-6 entries
       const synthesized = await synthesizeKBEntries(messageHistory, topic)
@@ -144,6 +145,7 @@ export async function POST(req: NextRequest) {
             question_framing: entry.question_framing,
             synthesized_answer: entry.synthesized_answer,
             exposable_to_users: entry.exposable_to_users,
+            supporting_doc_ids: docIds.length > 0 ? docIds : undefined,
             raw_transcript_id: transcript.transcript_id,
             status: 'draft'
           })

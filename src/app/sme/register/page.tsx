@@ -66,6 +66,9 @@ export default function SMERegisterPage() {
   const [entryStates, setEntryStates] = useState<EntryState[]>([])
   const [submitting, setSubmitting] = useState(false)
 
+  const [uploadedDocs, setUploadedDocs] = useState<{ doc_id: string; file_name: string; url: string }[]>([])
+  const [uploadingFile, setUploadingFile] = useState(false)
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -170,6 +173,27 @@ export default function SMERegisterPage() {
     }
   }
 
+  // ── File upload during interview ───────────────────────────────────────
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || !interviewId) return
+    setUploadingFile(true)
+    try {
+      for (const file of Array.from(files)) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('interview_id', interviewId)
+        const res = await fetch('/api/sme/upload', { method: 'POST', body: formData })
+        const data = await res.json()
+        if (res.ok) setUploadedDocs(prev => [...prev, data])
+      }
+    } finally {
+      setUploadingFile(false)
+      e.target.value = ''
+    }
+  }
+
   // ── Synthesize (screen 5 → 6 → 7) ─────────────────────────────────────
 
   const handleSynthesize = async () => {
@@ -179,7 +203,12 @@ export default function SMERegisterPage() {
       const res = await fetch('/api/sme/interview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'synthesize', interview_id: interviewId, sme_id: smeId })
+        body: JSON.stringify({
+          action: 'synthesize',
+          interview_id: interviewId,
+          sme_id: smeId,
+          uploaded_doc_ids: uploadedDocs.map(d => d.doc_id)
+        })
       })
       const data = await res.json()
       const entries: KBEntry[] = data.kb_entries || []
@@ -256,7 +285,7 @@ export default function SMERegisterPage() {
   // ═══════════════════════════════════════════════════════════════════════
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#FAFAFA', minHeight: '100vh', color: 'var(--text-1)', lineHeight: 1.5 }}>
+    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", background: '#F6F6F6', minHeight: '100vh', color: 'var(--text-1)', lineHeight: 1.5 }}>
 
       {/* ── Header ── */}
       <div style={{ maxWidth: 760, margin: '0 auto', padding: '20px 20px 0' }}>
@@ -264,13 +293,13 @@ export default function SMERegisterPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.5 }}>Thoth</span>
-                <span style={{ fontSize: 10, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 1 }}>
+                <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: -0.5 }}>Thoth</span>
+                <span style={{ fontSize: 14, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 1 }}>
                   A <strong style={{ color: 'var(--tm-magenta)' }}>T-Mobile</strong> × GIX project
                 </span>
               </div>
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ fontSize: 14, color: 'var(--text-2)', display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />
               {screen === 'done' ? 'All done!' : 'Auto-saving'}
             </div>
@@ -292,7 +321,7 @@ export default function SMERegisterPage() {
             <p style={subtitleStyle}>I'll help you share your knowledge with GIX students — without filling out a 20-field form. Paste anything that describes your role and I'll figure out the rest.</p>
             <h2 style={h2Style}>What can I paste?</h2>
             <div style={hintBoxStyle}>
-              <div style={{ fontSize: 13, color: 'var(--text-2)' }}>
+              <div style={{ fontSize: 15, color: 'var(--text-2)' }}>
                 <div style={{ padding: '2px 0' }}>• A link to your GIX profile page or LinkedIn</div>
                 <div style={{ padding: '2px 0' }}>• A job description or bio paragraph</div>
                 <div style={{ padding: '2px 0' }}>• Or just describe your role in a few sentences</div>
@@ -321,7 +350,7 @@ export default function SMERegisterPage() {
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <div style={spinnerStyle} />
               <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Reading your profile...</div>
-              <div style={{ fontSize: 13, color: 'var(--text-2)' }}>Extracting name, title, domain, and areas of expertise</div>
+              <div style={{ fontSize: 15, color: 'var(--text-2)' }}>Extracting name, title, domain, and areas of expertise</div>
             </div>
           </Card>
         )}
@@ -401,7 +430,7 @@ export default function SMERegisterPage() {
             <p style={subtitleStyle}>This helps Thoth route students to you — and only to you — when it's actually your area.</p>
 
             <h2 style={{ ...h2Style, marginTop: 12 }}>Which topics are NOT your responsibility?</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 12 }}>Check anything outside your scope. Leave things you DO own unchecked.</p>
+            <p style={{ fontSize: 15, color: 'var(--text-2)', marginBottom: 12 }}>Check anything outside your scope. Leave things you DO own unchecked.</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 16 }}>
               {CAREER_SERVICES_TOPICS.map(t => {
                 const checked = draft.exclusions.includes(t.id)
@@ -409,7 +438,7 @@ export default function SMERegisterPage() {
                   <label key={t.id} style={{
                     padding: '8px 12px', background: checked ? 'var(--danger-bg)' : 'white',
                     border: `1px solid ${checked ? '#F7C1C1' : 'var(--border)'}`, borderRadius: 6,
-                    fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8
+                    fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8
                   }}>
                     <input type="checkbox" checked={checked} onChange={() => toggleExclusion(t.id)} style={{ width: 'auto' }} />
                     <span>{t.display}</span>
@@ -417,12 +446,12 @@ export default function SMERegisterPage() {
                 )
               })}
             </div>
-            <div style={{ marginBottom: 24, padding: '10px 14px', background: 'var(--beige)', borderRadius: 6, fontSize: 12, color: 'var(--text-2)', borderLeft: '3px solid var(--wine)' }}>
+            <div style={{ marginBottom: 24, padding: '10px 14px', background: 'var(--beige)', borderRadius: 6, fontSize: 14, color: 'var(--text-2)', borderLeft: '3px solid var(--wine)' }}>
               <strong>Note:</strong> If you partly own a topic, leave it unchecked. The interview will clarify exact boundaries.
             </div>
 
             <h2 style={{ ...h2Style, marginTop: 4 }}>When Thoth can't answer, how should it reach you?</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-2)', marginBottom: 8 }}>Add channels and reorder by priority (use ↑↓).</p>
+            <p style={{ fontSize: 15, color: 'var(--text-2)', marginBottom: 8 }}>Add channels and reorder by priority (use ↑↓).</p>
 
             {/* Channel picker */}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -445,13 +474,13 @@ export default function SMERegisterPage() {
                     borderRadius: 8, margin: '10px 0',
                     display: 'flex', alignItems: 'center', gap: 12, position: 'relative'
                   }}>
-                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--wine)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, flexShrink: 0 }}>
+                    <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--wine)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600, flexShrink: 0 }}>
                       {idx + 1}
                     </div>
-                    <span style={{ flex: 1, fontSize: 13 }}>{CHANNEL_LABELS[pref.channel]}</span>
+                    <span style={{ flex: 1, fontSize: 15 }}>{CHANNEL_LABELS[pref.channel]}</span>
                     <div style={{ display: 'flex', gap: 4 }}>
-                      <button onClick={() => moveChannel(idx, -1)} disabled={idx === 0} style={{ ...btnTertiary, padding: '2px 8px', fontSize: 12, opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
-                      <button onClick={() => moveChannel(idx, 1)} disabled={idx === draft.routing_preferences.length - 1} style={{ ...btnTertiary, padding: '2px 8px', fontSize: 12, opacity: idx === draft.routing_preferences.length - 1 ? 0.3 : 1 }}>↓</button>
+                      <button onClick={() => moveChannel(idx, -1)} disabled={idx === 0} style={{ ...btnTertiary, padding: '2px 8px', fontSize: 14, opacity: idx === 0 ? 0.3 : 1 }}>↑</button>
+                      <button onClick={() => moveChannel(idx, 1)} disabled={idx === draft.routing_preferences.length - 1} style={{ ...btnTertiary, padding: '2px 8px', fontSize: 14, opacity: idx === draft.routing_preferences.length - 1 ? 0.3 : 1 }}>↓</button>
                       <button onClick={() => removeChannel(pref.channel)} style={{ ...btnDanger, padding: '2px 8px', fontSize: 12 }}>×</button>
                     </div>
                   </div>
@@ -459,7 +488,7 @@ export default function SMERegisterPage() {
               </div>
             )}
             {draft.routing_preferences.length === 0 && (
-              <div style={{ color: 'var(--text-3)', fontSize: 13, padding: '12px 0' }}>No channels added yet.</div>
+              <div style={{ color: 'var(--text-3)', fontSize: 15, padding: '12px 0' }}>No channels added yet.</div>
             )}
 
             {extractError && <div style={errorStyle}>{extractError}</div>}
@@ -483,7 +512,7 @@ export default function SMERegisterPage() {
               <StageLabel>Step 4 · Knowledge interview</StageLabel>
               <h1 style={{ ...h1Style, marginBottom: 4 }}>Let's talk about your work</h1>
               <p style={subtitleStyle}>Answer naturally. I'll ask structured follow-ups. When I'm done, click "Synthesize".</p>
-              <div style={{ padding: '10px 14px', background: 'var(--beige)', borderRadius: 8, marginBottom: 14, fontSize: 12, color: 'var(--text-2)' }}>
+              <div style={{ padding: '10px 14px', background: 'var(--beige)', borderRadius: 8, marginBottom: 14, fontSize: 14, color: 'var(--text-2)' }}>
                 <span style={{ fontWeight: 500, color: 'var(--text-1)' }}>{messages.filter(m => m.role === 'assistant').length}</span> questions asked
               </div>
             </div>
@@ -505,7 +534,7 @@ export default function SMERegisterPage() {
                 </div>
               ))}
               {chatLoading && (
-                <div style={{ color: 'var(--text-3)', fontSize: 13, padding: '4px 0 4px 12px', borderLeft: '2px solid var(--border-strong)' }}>
+                <div style={{ color: 'var(--text-3)', fontSize: 15, padding: '4px 0 4px 12px', borderLeft: '2px solid var(--border-strong)' }}>
                   Thinking...
                 </div>
               )}
@@ -522,6 +551,38 @@ export default function SMERegisterPage() {
                 style={{ ...textareaStyle, resize: 'none' }}
                 disabled={chatLoading}
               />
+
+              {/* File upload */}
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-3)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6 }}>
+                  Supporting documents <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — attach PDFs or text files)</span>
+                </div>
+                <label style={{
+                  display: 'block', border: '1.5px dashed var(--border-strong)', borderRadius: 8,
+                  padding: '10px 14px', textAlign: 'center', cursor: uploadingFile ? 'wait' : 'pointer',
+                  background: 'var(--beige)', fontSize: 15, color: 'var(--text-2)', transition: 'border-color 0.15s'
+                }}>
+                  <input
+                    type="file"
+                    accept=".pdf,.txt"
+                    multiple
+                    style={{ display: 'none' }}
+                    onChange={handleFileUpload}
+                    disabled={uploadingFile}
+                  />
+                  {uploadingFile ? 'Uploading…' : '+ Attach PDF or text file'}
+                </label>
+                {uploadedDocs.length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {uploadedDocs.map(doc => (
+                      <span key={doc.doc_id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'var(--wine-light)', color: 'var(--wine)', borderRadius: 12, fontSize: 14, border: '1px solid var(--wine)' }}>
+                        📎 {doc.file_name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <BtnRow>
                 {interviewDone ? (
                   <>
@@ -545,7 +606,7 @@ export default function SMERegisterPage() {
             <div style={{ textAlign: 'center', padding: '40px 20px' }}>
               <div style={spinnerStyle} />
               <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>Synthesizing your knowledge...</div>
-              <div style={{ fontSize: 13, color: 'var(--text-2)' }}>Turning our conversation into structured Q&A entries</div>
+              <div style={{ fontSize: 15, color: 'var(--text-2)' }}>Turning our conversation into structured Q&A entries</div>
             </div>
           </Card>
         )}
@@ -584,7 +645,7 @@ export default function SMERegisterPage() {
             ))}
 
             {/* Transcript note */}
-            <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--beige)', borderRadius: 6, fontSize: 12, color: 'var(--text-2)', borderLeft: '3px solid var(--text-3)' }}>
+            <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--beige)', borderRadius: 6, fontSize: 14, color: 'var(--text-2)', borderLeft: '3px solid var(--text-3)' }}>
               Raw interview transcript stored internally for audit — never shown to students.
             </div>
 
@@ -611,7 +672,7 @@ export default function SMERegisterPage() {
             <p style={{ ...subtitleStyle, maxWidth: 520, margin: '0 auto 24px' }}>
               {approvedCount} {approvedCount === 1 ? 'entry is' : 'entries are'} pending admin review. Once published, students asking about your topics will get cited answers from your expertise.
             </p>
-            <div style={{ background: 'var(--beige)', borderRadius: 8, padding: '16px 20px', maxWidth: 520, margin: '0 auto 24px', textAlign: 'left', fontSize: 13 }}>
+            <div style={{ background: 'var(--beige)', borderRadius: 8, padding: '16px 20px', maxWidth: 520, margin: '0 auto 24px', textAlign: 'left', fontSize: 15 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>What happens next</div>
               <ul style={{ color: 'var(--text-1)', lineHeight: 1.8, listStyle: 'none' }}>
                 <li>• An admin will review and publish your entries.</li>
@@ -641,7 +702,7 @@ export default function SMERegisterPage() {
               const prev = SCREEN_ORDER[screenIdx - 1]
               if (prev) setScreen(prev)
             }}
-            style={{ background: 'none', border: 'none', padding: '6px 14px', borderRadius: 16, cursor: 'pointer', fontSize: 13, color: 'var(--text-2)', opacity: screenIdx === 0 ? 0.3 : 1 }}
+            style={{ background: 'none', border: 'none', padding: '6px 14px', borderRadius: 16, cursor: 'pointer', fontSize: 15, color: 'var(--text-2)', opacity: screenIdx === 0 ? 0.3 : 1 }}
           >
             ← Back
           </button>
@@ -658,7 +719,7 @@ export default function SMERegisterPage() {
               )
             })}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--text-2)', marginRight: 4 }}>
+          <div style={{ fontSize: 14, color: 'var(--text-2)', marginRight: 4 }}>
             {stageIndex + 1}/3
           </div>
         </div>
@@ -673,24 +734,24 @@ export default function SMERegisterPage() {
 
 function StageRibbon({ stageIndex }: { stageIndex: number }) {
   return (
-    <div style={{ display: 'flex', gap: 0, background: 'white', border: '1px solid var(--border)', borderRadius: 10, padding: 4 }}>
+    <div style={{ display: 'flex', gap: 0, background: 'white', border: '1px solid var(--border)', borderRadius: 999, padding: 4 }}>
       {STAGES.map((s, i) => {
         const done = i < stageIndex
         const active = i === stageIndex
         return (
           <div key={s.label} style={{
-            flex: 1, padding: '8px 12px', borderRadius: 6, fontSize: 12,
+            flex: 1, padding: '8px 12px', borderRadius: 999, fontSize: 14,
             textAlign: 'center', transition: 'all 0.2s',
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            background: active ? 'var(--wine)' : 'transparent',
+            background: active ? 'var(--tm-magenta)' : 'transparent',
             color: active ? 'white' : done ? 'var(--text-1)' : 'var(--text-2)',
             fontWeight: active ? 500 : 400
           }}>
             <span style={{
               width: 18, height: 18, borderRadius: '50%', display: 'inline-flex',
-              alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 600,
+              alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 600,
               background: active ? 'white' : done ? 'var(--success)' : 'var(--border)',
-              color: active ? 'var(--wine)' : done ? 'white' : 'var(--text-2)'
+              color: active ? 'var(--tm-magenta)' : done ? 'white' : 'var(--text-2)'
             }}>
               {done ? '✓' : i + 1}
             </span>
@@ -704,7 +765,7 @@ function StageRibbon({ stageIndex }: { stageIndex: number }) {
 
 function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{ background: 'white', borderRadius: 12, padding: 28, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', marginBottom: 16, border: '1px solid var(--border)', ...style }}>
+    <div style={{ background: 'white', borderRadius: 24, padding: 28, boxShadow: '0 1px 4px rgba(0,0,0,0.06)', marginBottom: 16, border: '1px solid var(--border)', ...style }}>
       {children}
     </div>
   )
@@ -715,7 +776,7 @@ function BtnRow({ children, style }: { children: React.ReactNode; style?: React.
 }
 
 function StageLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 11, color: 'var(--wine)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8, fontWeight: 600 }}>{children}</div>
+  return <div style={{ fontSize: 15, color: 'var(--wine)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8, fontWeight: 600 }}>{children}</div>
 }
 
 function EntryCard({ state, onChange, onApprove, onReject }: {
@@ -731,14 +792,14 @@ function EntryCard({ state, onChange, onApprove, onReject }: {
   return (
     <div style={{
       border: `1px solid ${approval === 'approved' ? '#C6E0B0' : editing ? 'var(--wine)' : 'var(--border)'}`,
-      borderRadius: 10, padding: 18, marginBottom: 12,
+      borderRadius: 20, padding: 20, marginBottom: 12,
       background: approval === 'approved' ? '#F8FCF4' : editing ? 'var(--wine-light)' : 'white'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10, gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div style={{ marginBottom: 6 }}>
             {tags.map((tag, i) => (
-              <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: i === 0 ? 'var(--wine)' : 'var(--wine-light)', color: i === 0 ? 'white' : 'var(--wine)', borderRadius: 12, fontSize: 12, margin: '3px 4px 3px 0', fontWeight: i === 0 ? 500 : 400 }}>
+              <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: i === 0 ? 'var(--wine)' : 'var(--wine-light)', color: i === 0 ? 'white' : 'var(--wine)', borderRadius: 12, fontSize: 14, margin: '3px 4px 3px 0', fontWeight: i === 0 ? 500 : 400 }}>
                 {i === 0 ? '★' : '☆'} {TOPIC_BY_ID[tag]?.display || tag}
               </span>
             ))}
@@ -746,21 +807,21 @@ function EntryCard({ state, onChange, onApprove, onReject }: {
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 8 }}>{entry.question_framing}</div>
         </div>
         <div>
-          {approval === 'approved' && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, background: 'var(--success-bg)', color: 'var(--success)' }}>Approved</span>}
-          {approval === 'rejected' && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, background: 'var(--danger-bg)', color: 'var(--danger)' }}>Rejected</span>}
-          {approval === 'pending' && !entry.exposable_to_users && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, background: '#FFF8EE', color: 'var(--warning)' }}>Route only</span>}
-          {approval === 'pending' && entry.exposable_to_users && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 11, fontWeight: 500, background: 'var(--warning-bg)', color: 'var(--warning)' }}>Pending</span>}
+          {approval === 'approved' && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 500, background: 'var(--success-bg)', color: 'var(--success)' }}>Approved</span>}
+          {approval === 'rejected' && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 500, background: 'var(--danger-bg)', color: 'var(--danger)' }}>Rejected</span>}
+          {approval === 'pending' && !entry.exposable_to_users && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 500, background: '#FFF8EE', color: 'var(--warning)' }}>Route only</span>}
+          {approval === 'pending' && entry.exposable_to_users && <span style={{ padding: '3px 10px', borderRadius: 12, fontSize: 15, fontWeight: 500, background: 'var(--warning-bg)', color: 'var(--warning)' }}>Pending</span>}
         </div>
       </div>
 
       {editing ? (
         <div>
-          <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.4px', margin: '12px 0 6px' }}>Synthesized answer</label>
+          <label style={{ display: 'block', fontSize: 15, fontWeight: 600, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '0.4px', margin: '12px 0 6px' }}>Synthesized answer</label>
           <textarea
             rows={4}
             value={answer}
             onChange={e => onChange(e.target.value)}
-            style={{ ...textareaStyle, fontSize: 13 }}
+            style={{ ...textareaStyle, fontSize: 15 }}
           />
           <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
             <button onClick={() => setEditing(false)} style={{ ...btnTertiary, padding: '6px 12px', fontSize: 12 }}>Cancel</button>
@@ -769,8 +830,8 @@ function EntryCard({ state, onChange, onApprove, onReject }: {
         </div>
       ) : (
         <>
-          <div style={{ fontSize: 13, color: 'var(--text-1)', lineHeight: 1.6 }}>{answer}</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 11, color: 'var(--text-2)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 15, color: 'var(--text-1)', lineHeight: 1.6 }}>{answer}</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 15, color: 'var(--text-2)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
             <span>{entry.exposable_to_users ? '👁 Exposable to students' : '🔒 Internal only — students see routing message'}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
@@ -792,25 +853,25 @@ function EntryCard({ state, onChange, onApprove, onReject }: {
 // Shared inline styles (mirrors prototype CSS tokens)
 // ═══════════════════════════════════════════════════════════════════════════
 
-const h1Style: React.CSSProperties = { fontSize: 22, fontWeight: 600, marginBottom: 8, color: 'var(--black, #000)', letterSpacing: -0.5 }
-const h2Style: React.CSSProperties = { fontSize: 15, fontWeight: 600, marginBottom: 12, color: 'var(--text-1)' }
-const subtitleStyle: React.CSSProperties = { color: 'var(--text-2)', fontSize: 14, marginBottom: 20 }
-const hintBoxStyle: React.CSSProperties = { background: 'var(--beige)', padding: '12px 16px', borderRadius: 8, marginBottom: 16 }
-const textareaStyle: React.CSSProperties = { width: '100%', padding: '12px 14px', border: '1px solid var(--border-strong)', borderRadius: 8, fontFamily: 'inherit', fontSize: 14, background: 'white', resize: 'vertical', color: 'var(--text-1)', boxSizing: 'border-box' }
-const inputStyle: React.CSSProperties = { width: '100%', padding: '10px 12px', border: '1px solid var(--border)', borderRadius: 6, fontFamily: 'inherit', fontSize: 14, background: 'white', color: 'var(--text-1)', boxSizing: 'border-box' }
-const colLabelStyle: React.CSSProperties = { fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-3)', marginBottom: 8, fontWeight: 600 }
-const fieldLabelStyle: React.CSSProperties = { fontSize: 12, fontWeight: 500, color: 'var(--text-1)', marginBottom: 4 }
-const sourceBoxStyle: React.CSSProperties = { background: 'var(--beige)', padding: 14, borderRadius: 8, fontSize: 13, color: 'var(--text-1)', whiteSpace: 'pre-wrap', fontFamily: "'SF Mono', Monaco, monospace", lineHeight: 1.6, minHeight: 120 }
-const chipAreaStyle: React.CSSProperties = { padding: 8, border: '1px solid var(--border)', borderRadius: 6, background: 'white', minHeight: 44 }
-const chipStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', background: 'var(--wine-light)', color: 'var(--wine)', borderRadius: 12, fontSize: 12, margin: '3px 4px', cursor: 'pointer', border: '1px solid transparent' }
+const h1Style: React.CSSProperties = { fontSize: 26, fontWeight: 700, marginBottom: 8, color: 'var(--text-1)', letterSpacing: -0.6 }
+const h2Style: React.CSSProperties = { fontSize: 17, fontWeight: 600, marginBottom: 12, color: 'var(--text-1)' }
+const subtitleStyle: React.CSSProperties = { color: 'var(--text-2)', fontSize: 16, marginBottom: 20 }
+const hintBoxStyle: React.CSSProperties = { background: 'var(--beige)', padding: '14px 18px', borderRadius: 10, marginBottom: 16 }
+const textareaStyle: React.CSSProperties = { width: '100%', padding: '13px 15px', border: '1px solid var(--border-strong)', borderRadius: 10, fontFamily: 'inherit', fontSize: 16, background: 'white', resize: 'vertical', color: 'var(--text-1)', boxSizing: 'border-box' }
+const inputStyle: React.CSSProperties = { width: '100%', padding: '11px 14px', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'inherit', fontSize: 16, background: 'white', color: 'var(--text-1)', boxSizing: 'border-box' }
+const colLabelStyle: React.CSSProperties = { fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-3)', marginBottom: 8, fontWeight: 600 }
+const fieldLabelStyle: React.CSSProperties = { fontSize: 14, fontWeight: 500, color: 'var(--text-1)', marginBottom: 6 }
+const sourceBoxStyle: React.CSSProperties = { background: 'var(--beige)', padding: 16, borderRadius: 10, fontSize: 15, color: 'var(--text-1)', whiteSpace: 'pre-wrap', fontFamily: "'SF Mono', Monaco, monospace", lineHeight: 1.6, minHeight: 120 }
+const chipAreaStyle: React.CSSProperties = { padding: 10, border: '1px solid var(--border)', borderRadius: 8, background: 'white', minHeight: 48 }
+const chipStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', background: 'var(--wine-light)', color: 'var(--wine)', borderRadius: 14, fontSize: 14, margin: '3px 4px', cursor: 'pointer', border: '1px solid transparent' }
 const chipPrimaryStyle: React.CSSProperties = { ...chipStyle, background: 'var(--wine)', color: 'white', fontWeight: 500 }
-const btnPrimary: React.CSSProperties = { background: 'var(--tm-magenta)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer' }
-const btnSuccess: React.CSSProperties = { background: 'var(--success)', color: 'white', border: 'none', padding: '10px 20px', borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: 'pointer' }
-const btnTertiary: React.CSSProperties = { background: 'white', color: 'var(--text-2)', border: '1px solid var(--border-strong)', padding: '10px 20px', borderRadius: 8, fontSize: 14, cursor: 'pointer' }
-const btnDanger: React.CSSProperties = { background: 'white', color: 'var(--danger)', border: '1px solid #F7C1C1', padding: '10px 20px', borderRadius: 8, fontSize: 14, cursor: 'pointer' }
+const btnPrimary: React.CSSProperties = { background: 'var(--tm-magenta)', color: 'white', border: 'none', padding: '11px 24px', borderRadius: 999, fontSize: 16, fontWeight: 600, cursor: 'pointer' }
+const btnSuccess: React.CSSProperties = { background: 'var(--success)', color: 'white', border: 'none', padding: '11px 24px', borderRadius: 999, fontSize: 16, fontWeight: 600, cursor: 'pointer' }
+const btnTertiary: React.CSSProperties = { background: 'white', color: 'var(--text-2)', border: '1px solid var(--border-strong)', padding: '11px 24px', borderRadius: 999, fontSize: 15, cursor: 'pointer' }
+const btnDanger: React.CSSProperties = { background: 'white', color: 'var(--danger)', border: '1px solid #F7C1C1', padding: '11px 24px', borderRadius: 999, fontSize: 15, cursor: 'pointer' }
 const btnDisabled: React.CSSProperties = { ...btnPrimary, opacity: 0.4, cursor: 'not-allowed' }
-const errorStyle: React.CSSProperties = { marginTop: 10, padding: '10px 14px', background: 'var(--danger-bg)', borderLeft: '3px solid var(--danger)', borderRadius: 6, fontSize: 13, color: 'var(--danger)' }
-const warningBoxStyle: React.CSSProperties = { padding: '10px 14px', background: 'var(--warning-bg)', borderLeft: '3px solid var(--warning)', borderRadius: 6, fontSize: 13, color: 'var(--warning)' }
+const errorStyle: React.CSSProperties = { marginTop: 10, padding: '12px 16px', background: 'var(--danger-bg)', borderLeft: '3px solid var(--danger)', borderRadius: 8, fontSize: 15, color: 'var(--danger)' }
+const warningBoxStyle: React.CSSProperties = { padding: '12px 16px', background: 'var(--warning-bg)', borderLeft: '3px solid var(--warning)', borderRadius: 8, fontSize: 15, color: 'var(--warning)' }
 const spinnerStyle: React.CSSProperties = {
   display: 'block', width: 32, height: 32,
   border: '3px solid var(--border)', borderTopColor: 'var(--tm-magenta)',

@@ -127,7 +127,7 @@ export const kbApi = {
   async getById(entry_id: string) {
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
-      .select('*, sme_profiles(*)')
+      .select('*, sme_profiles!knowledge_entries_sme_id_fkey(*)')
       .eq('entry_id', entry_id)
       .single()
     if (error) return null
@@ -156,7 +156,7 @@ export const kbApi = {
   async getPendingAdmin() {
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
-      .select('*, sme_profiles(*)')
+      .select('*, sme_profiles!knowledge_entries_sme_id_fkey(*)')
       .eq('status', 'pending_review')
       .order('created_at', { ascending: false })
     if (error) throw error
@@ -205,7 +205,7 @@ export const kbApi = {
     const today = new Date().toISOString()
     const { data, error } = await supabaseAdmin
       .from('knowledge_entries')
-      .select('*, sme_profiles(*)')
+      .select('*, sme_profiles!knowledge_entries_sme_id_fkey(*)')
       .eq('status', 'approved')
       .lte('next_review_due', today)
       .order('next_review_due')
@@ -271,10 +271,10 @@ export const interviewApi = {
 // ============================================
 
 export const transcriptApi = {
-  async create(sme_id: string, session_id: string, messages: any[]) {
+  async create(sme_id: string, session_id: string, messages: any[], uploaded_doc_ids: string[] = []) {
     const { data, error } = await supabaseAdmin
       .from('raw_transcripts')
-      .insert({ sme_id, session_id, messages })
+      .insert({ sme_id, session_id, messages, uploaded_doc_ids })
       .select()
       .single()
     if (error) throw error
