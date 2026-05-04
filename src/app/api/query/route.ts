@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     // Step 2: Semantic search against approved KB
     const threshold = parseFloat(process.env.CONFIDENCE_THRESHOLD || '0.75')
-    const kbResults = await kbApi.semanticSearch(questionEmbedding, threshold - 0.1, 5)
+    const kbResults = await kbApi.semanticSearch(questionEmbedding, 0.3, 5)
 
     // Step 3: Get all SMEs for routing
     const allSMEs = await smeApi.getAll()
