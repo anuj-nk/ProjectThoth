@@ -3,6 +3,18 @@
 // Provider order: OpenRouter free → Groq fallback
 // ============================================
 
+export type LlmUsage = {
+  prompt_tokens: number
+  completion_tokens: number
+  total_tokens: number
+  model: string
+}
+
+export type LlmResponse = {
+  text: string
+  usage: LlmUsage
+}
+
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY!
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 const GROQ_API_KEY = process.env.GROQ_API_KEY
@@ -83,7 +95,7 @@ async function callOpenRouterModel(
   systemPrompt: string,
   messages: { role: 'user' | 'assistant'; content: string }[],
   maxTokens: number
-): Promise<string> {
+): Promise<{ text: string; usage: LlmUsage }> {
   const response = await fetch(`${OPENROUTER_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -108,7 +120,14 @@ async function callOpenRouterModel(
 
   const content = data.choices?.[0]?.message?.content || ''
   if (!content) throw new Error('empty response')
-  return content
+
+  const usage: LlmUsage = {
+    prompt_tokens: data.usage?.prompt_tokens ?? 0,
+    completion_tokens: data.usage?.completion_tokens ?? 0,
+    total_tokens: data.usage?.total_tokens ?? 0,
+    model,
+  }
+  return { text: content, usage }
 }
 
 async function callGroqModel(
@@ -116,7 +135,7 @@ async function callGroqModel(
   systemPrompt: string,
   messages: { role: 'user' | 'assistant'; content: string }[],
   maxTokens: number
-): Promise<string> {
+): Promise<{ text: string; usage: LlmUsage }> {
   const response = await fetch(`${GROQ_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -139,18 +158,25 @@ async function callGroqModel(
 
   const content = data.choices?.[0]?.message?.content || ''
   if (!content) throw new Error('empty response')
-  return content
+
+  const usage: LlmUsage = {
+    prompt_tokens: data.usage?.prompt_tokens ?? 0,
+    completion_tokens: data.usage?.completion_tokens ?? 0,
+    total_tokens: data.usage?.total_tokens ?? 0,
+    model,
+  }
+  return { text: content, usage }
 }
 
 // ============================================
 // CORE CALLER: OpenRouter → Groq fallback
 // ============================================
-async function callLLM(
+export async function callLLM(
   systemPrompt: string,
   messages: { role: 'user' | 'assistant'; content: string }[],
   maxTokens: number = 800,
   preferredModel?: string
-): Promise<string> {
+): Promise<LlmResponse> {
   if (PRODUCTION_MODEL) {
     return callOpenRouterModel(PRODUCTION_MODEL, systemPrompt, messages, maxTokens)
   }
@@ -190,6 +216,16 @@ async function callLLM(
   }
 
   throw new Error(`All models failed:\n${errors.join('\n')}`)
+}
+
+// Backwards-compatible shim: returns just the text string
+async function askLLMText(
+  systemPrompt: string,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  maxTokens?: number,
+  preferredModel?: string
+): Promise<string> {
+  return (await callLLM(systemPrompt, messages, maxTokens, preferredModel)).text
 }
 
 // ============================================
@@ -367,7 +403,7 @@ Return ONLY valid JSON, no markdown:
 // ============================================
 
 export async function extractProfile(rawInput: string): Promise<any> {
-  const text = await callLLM(
+  const text = await askLLMText(
     PROFILE_EXTRACTION_SYSTEM_PROMPT,
     [{ role: 'user', content: rawInput }],
     800
@@ -392,7 +428,7 @@ export async function conductInterview(
   const fullMessages = history.length > 0
     ? history
     : [{ role: 'user' as const, content: smeInput || 'Hello, ready to start.' }]
-  return callLLM(buildInterviewSystemPrompt(seedQuestions), fullMessages, 400)
+  return askLLMText(buildInterviewSystemPrompt(seedQuestions), fullMessages, 400)
 }
 
 export async function synthesizeKBEntries(
@@ -408,7 +444,7 @@ export async function synthesizeKBEntries(
     .map(m => `${m.role === 'assistant' ? 'Thoth' : 'SME'}: ${m.content}`)
     .join('\n\n')
 
-  const text = await callLLM(
+  const text = await askLLMText(
     SYNTHESIS_SYSTEM_PROMPT,
     [{ role: 'user', content: `Synthesize this interview about "${topic}" into knowledge base entries:\n\n${transcriptText}` }],
     1500
@@ -430,7 +466,7 @@ export async function handleUserQuery(
   kbResults: KBRow[],
   allSMEs: SMERow[]
 ): Promise<QueryResult> {
-  const text = await callLLM(
+  const text = await askLLMText(
     buildQueryPrompt(kbResults, allSMEs),
     [{ role: 'user', content: question }],
     800
@@ -529,3 +565,6 @@ function padEmbedding(embedding: number[], dimensions: number = 1536): number[] 
   if (embedding.length > dimensions) return embedding.slice(0, dimensions)
   return [...embedding, ...Array(dimensions - embedding.length).fill(0)]
 }
+
+// Alias for v1 benchmark routes
+export const embedQuery = generateEmbedding

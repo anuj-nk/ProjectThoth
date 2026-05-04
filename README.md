@@ -10,7 +10,7 @@
 
 ```
 Prototype URL:       https://project-thoth.vercel.app
-Benchmark API base:  https://project-thoth.vercel.app/api/benchmark
+Benchmark API base:  https://project-thoth.vercel.app/api/v1
 Benchmark API key:   [set BENCHMARK_API_KEY in evaluator env — see §Environment Variables]
 ```
 
@@ -54,7 +54,7 @@ Direct mapping to the 8 scored capabilities from the brief.
 
 ## Benchmark API
 
-The standardized REST API lives at `/api/benchmark/*` and conforms to `benchmark/api-specification.md`. Authentication: `Authorization: Bearer <BENCHMARK_API_KEY>`.
+The standardized REST API lives at `/api/v1/*` and conforms to `docs/specs/api-specification.md`. Authentication: `Authorization: Bearer <BENCHMARK_API_KEY>`.
 
 Every LLM-backed response includes a `usage` object:
 
@@ -73,21 +73,26 @@ Every LLM-backed response includes a `usage` object:
 
 | Method | Path | Capability | Status |
 |--------|------|-----------|--------|
-| `GET` | `/api/benchmark/health` | Health check | ✅ Live |
-| `POST` | `/api/benchmark/smes` | 1. SME Onboarding | ✅ Live |
-| `GET` | `/api/benchmark/smes` | 1. List SMEs | ✅ Live |
-| `GET` | `/api/benchmark/smes/{id}` | 1. Get SME | ✅ Live |
-| `POST` | `/api/benchmark/smes/{id}/interviews` | 2. Start Interview | ✅ Live |
-| `POST` | `/api/benchmark/interviews/{id}/turns` | 2. Interview Turn | ✅ Live |
-| `POST` | `/api/benchmark/smes/{id}/materials` | 3. Material Upload | ✅ Live |
-| `POST` | `/api/benchmark/smes/{id}/knowledge/synthesize` | 4. Synthesis | ✅ Live |
-| `PUT` | `/api/benchmark/knowledge/{id}` | 5. Edit Entry | ✅ Live |
-| `POST` | `/api/benchmark/knowledge/{id}/approve` | 5. SME Approve | ✅ Live |
-| `POST` | `/api/benchmark/knowledge/{id}/admin-approve` | 5. Admin Publish | ✅ Live |
-| `POST` | `/api/benchmark/knowledge/{id}/reject` | 5. Reject | ✅ Live |
-| `POST` | `/api/benchmark/query` | 6, 7, 8. Q&A / Clarify / Route | ✅ Live |
-| `POST` | `/api/benchmark/system/purge` | Benchmark teardown | ✅ Live |
-| `POST` | `/api/benchmark/system/reset` | Benchmark reset | ✅ Live |
+| `GET` | `/api/v1/health` | Health check | ✅ Live |
+| `POST` | `/api/v1/smes` | 1. SME Onboarding | ✅ Live |
+| `GET` | `/api/v1/smes` | 1. List SMEs | ✅ Live |
+| `GET` | `/api/v1/smes/{id}` | 1. Get SME | ✅ Live |
+| `POST` | `/api/v1/smes/{id}/interviews` | 2. Start Interview | ✅ Live |
+| `GET` | `/api/v1/smes/{id}/interviews` | 2. List Interviews | ✅ Live |
+| `GET` | `/api/v1/interviews/{id}` | 2. Get Interview | ✅ Live |
+| `POST` | `/api/v1/interviews/{id}/turns` | 2. Interview Turn | ✅ Live |
+| `POST` | `/api/v1/smes/{id}/materials` | 3. Material Upload | ✅ Live |
+| `GET` | `/api/v1/smes/{id}/materials` | 3. List Materials | ✅ Live |
+| `POST` | `/api/v1/smes/{id}/knowledge/synthesize` | 4. Synthesis | ✅ Live |
+| `GET` | `/api/v1/knowledge` | 5. List Entries | ✅ Live |
+| `GET` | `/api/v1/knowledge/{id}` | 5. Get Entry | ✅ Live |
+| `PUT` | `/api/v1/knowledge/{id}` | 5. Edit Entry | ✅ Live |
+| `POST` | `/api/v1/knowledge/{id}/approve` | 5. SME Approve | ✅ Live |
+| `POST` | `/api/v1/knowledge/{id}/admin-approve` | 5. Admin Publish | ✅ Live |
+| `POST` | `/api/v1/knowledge/{id}/reject` | 5. Reject | ✅ Live |
+| `POST` | `/api/v1/query` | 6, 7, 8. Q&A / Clarify / Route | ✅ Live |
+| `POST` | `/api/v1/system/purge` | Benchmark teardown | ✅ Live |
+| `POST` | `/api/v1/system/reset` | Benchmark reset | ✅ Live |
 
 > Internal UI routes (`/api/sme/interview`, `/api/query`, `/api/kb/approve`) are separate from benchmark routes and do not require the benchmark key.
 
@@ -107,7 +112,7 @@ Every LLM-backed response includes a `usage` object:
 │  │              API Routes                     │  │
 │  │  /sme/onboard  /sme/interview  /sme/upload  │  │
 │  │  /kb/approve   /query   /admin/queue        │  │
-│  │  /benchmark/*  (standardized eval API)      │  │
+│  │  /v1/*         (standardized benchmark API)  │  │
 │  └──────┬──────────────────────────────────────┘  │
 │         │                                         │
 │  ┌──────▼──────────────┐  ┌─────────────────────┐ │
@@ -221,17 +226,20 @@ Open [http://localhost:3000](http://localhost:3000). You should see the Project 
 
 ### 6. Run the benchmark API locally
 
-The benchmark API is available at `http://localhost:3000/api/benchmark/*` with the same key as production.
+The benchmark API is available at `http://localhost:3000/api/v1/*` with the same key as production.
 
 ```bash
 # Health check
-curl -H "Authorization: Bearer <your-key>" http://localhost:3000/api/benchmark/health
+curl -H "Authorization: Bearer <your-key>" http://localhost:3000/api/v1/health
 
 # Create an SME
-curl -X POST http://localhost:3000/api/benchmark/smes \
+curl -X POST http://localhost:3000/api/v1/smes \
   -H "Authorization: Bearer <your-key>" \
   -H "Content-Type: application/json" \
   -d '{"full_name":"Test SME","email":"test@gix.uw.edu","domain":"career_services"}'
+
+# Run the full benchmark smoke test
+npx dotenv -e .env.local -- tsx src/scripts/test-benchmark-api.ts
 ```
 
 ---
@@ -274,7 +282,7 @@ project-thoth/
 │   │       │   └── approve/route.ts  # Two-tier approval + embedding generation
 │   │       ├── query/route.ts        # User Q&A, clarification, routing
 │   │       ├── admin/queue/route.ts  # Admin signal queue
-│   │       └── benchmark/            # Standardized eval API (all 8 capabilities)
+│   │       └── v1/                   # Standardized benchmark API (all 8 capabilities)
 │   ├── components/
 │   │   ├── user/UserChat.tsx         # User Q&A interface (Iris)
 │   │   ├── sme/SMEOnboarding.tsx     # Interview + synthesis review UI (Suzy)
@@ -290,7 +298,7 @@ project-thoth/
 │   ├── instruction.md                # Project brief (read-only)
 │   ├── Project_Thoth_PRD.md          # Full PRD
 │   └── specs/data_schema.yaml        # DB schema spec
-├── benchmark/                        # Benchmark API spec (api-specification.md)
+
 ├── ARCHITECTURE.md                   # System design, ER diagram, stack justification
 ├── CLAUDE.md                         # AI agent instructions (strict field name rules)
 └── .env.example                      # Environment variable template
@@ -332,7 +340,7 @@ See the [Demo Script](docs/demo-script.md) for the full step-by-step walkthrough
 | [docs/production-recommendations.md](docs/production-recommendations.md) | Security, scale, multi-tenancy, cost estimation for real deployment |
 | [docs/effort-log.md](docs/effort-log.md) | Kanban board / hours log |
 | [docs/Project_Thoth_PRD.md](docs/Project_Thoth_PRD.md) | Full product requirements document |
-| [benchmark/api-specification.md](benchmark/api-specification.md) | Benchmark API contract (request/response schemas) |
+| [docs/specs/api-specification.md](docs/specs/api-specification.md) | Benchmark API contract (request/response schemas) |
 
 ---
 

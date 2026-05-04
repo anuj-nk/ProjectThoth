@@ -349,3 +349,201 @@ export const adminQueueApi = {
     return data
   }
 }
+
+// ============================================
+// MATERIALS OPERATIONS (v1 benchmark API)
+// ============================================
+export const materialsApi = {
+  async create(material: {
+    sme_id: string
+    title: string
+    description?: string
+    file_type: string
+    storage_path: string
+    status?: string
+  }) {
+    const { data, error } = await supabaseAdmin
+      .from('materials')
+      .insert({ ...material, status: material.status || 'processed' })
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async getBySME(sme_id: string) {
+    const { data, error } = await supabaseAdmin
+      .from('materials')
+      .select('*')
+      .eq('sme_id', sme_id)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return data || []
+  },
+
+  async getById(material_id: string) {
+    const { data, error } = await supabaseAdmin
+      .from('materials')
+      .select('*')
+      .eq('material_id', material_id)
+      .single()
+    if (error) return null
+    return data
+  },
+
+  async deleteAll() {
+    const { error } = await supabaseAdmin.from('materials').delete().neq('material_id', '00000000-0000-0000-0000-000000000000')
+    if (error) throw error
+  }
+}
+
+// ============================================
+// QUERY SESSION OPERATIONS (v1 benchmark API)
+// ============================================
+export const querySessionsApi = {
+  async getOrCreate(session_id: string) {
+    const { data: existing } = await supabaseAdmin
+      .from('query_sessions')
+      .select('*')
+      .eq('session_id', session_id)
+      .single()
+    if (existing) return existing
+
+    const { data, error } = await supabaseAdmin
+      .from('query_sessions')
+      .insert({ session_id, context: [] })
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async appendTurn(session_id: string, turn: { question: string; answer: string; timestamp: string }) {
+    const session = await querySessionsApi.getOrCreate(session_id)
+    const context = [...(session.context || []), turn]
+    const { data, error } = await supabaseAdmin
+      .from('query_sessions')
+      .update({ context, updated_at: new Date().toISOString() })
+      .eq('session_id', session_id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async deleteAll() {
+    const { error } = await supabaseAdmin.from('query_sessions').delete().neq('session_id', '__never__')
+    if (error) throw error
+  }
+}
+
+// ============================================
+// V1-SPECIFIC KB OPERATIONS
+// ============================================
+export const kbV1Api = {
+  async getAll(statusFilter?: string) {
+    let query = supabaseAdmin
+      .from('knowledge_entries')
+      .select('*, sme_profiles!knowledge_entries_sme_id_fkey(*)')
+      .order('created_at', { ascending: false })
+    if (statusFilter) {
+      query = query.eq('status', statusFilter)
+    }
+    const { data, error } = await query
+    if (error) throw error
+    return data || []
+  },
+
+  async smeApprove(entry_id: string, sme_id: string) {
+    return kbApi.update(entry_id, {
+      status: 'pending_review',
+      approved_by_sme_id: sme_id,
+      approved_at: new Date().toISOString()
+    })
+  },
+
+  async adminApprove(entry_id: string) {
+    return kbApi.update(entry_id, {
+      status: 'approved',
+      admin_approved_at: new Date().toISOString(),
+      next_review_due: new Date(Date.now() + 6 * 30 * 24 * 60 * 60 * 1000).toISOString()
+    })
+  },
+
+  async reject(entry_id: string, reason?: string) {
+    return kbApi.update(entry_id, {
+      status: 'rejected',
+      rejected_at: new Date().toISOString(),
+      rejection_reason: reason || null
+    })
+  },
+
+  async deleteAll() {
+    const { error } = await supabaseAdmin.from('knowledge_entries').delete().neq('entry_id', '00000000-0000-0000-0000-000000000000')
+    if (error) throw error
+  },
+
+  async semanticSearch(embedding: number[], threshold: number = 0.5, limit: number = 5) {
+    const { data, error } = await supabaseAdmin.rpc('match_kb_entries', {
+      query_embedding: embedding,
+      match_threshold: threshold,
+      match_count: limit
+    })
+    if (error) throw error
+    return data || []
+  }
+}
+
+// ============================================
+// V1-SPECIFIC INTERVIEW OPERATIONS
+// ============================================
+export const interviewV1Api = {
+  async create(sme_id: string, topic: string) {
+    const { data, error } = await supabaseAdmin
+      .from('interview_sessions')
+      .insert({
+        sme_id,
+        stage: 'interview_active',
+        topic,
+        interview_status: 'in_progress',
+        message_history: [],
+        draft_entries: []
+      })
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async appendTurn(session_id: string, userMsg: string, assistantMsg: string) {
+    const session = await interviewApi.getById(session_id)
+    if (!session) throw new Error('Interview not found')
+    const history = session.message_history || []
+    const ts = new Date().toISOString()
+    history.push({ role: 'user', content: userMsg, timestamp: ts })
+    history.push({ role: 'assistant', content: assistantMsg, timestamp: ts })
+    return interviewApi.update(session_id, { message_history: history })
+  },
+
+  async complete(session_id: string) {
+    return interviewApi.update(session_id, { interview_status: 'completed' })
+  },
+
+  async deleteAll() {
+    const { error } = await supabaseAdmin.from('interview_sessions').delete().neq('session_id', '00000000-0000-0000-0000-000000000000')
+    if (error) throw error
+  }
+}
+
+// ============================================
+// PURGE — all data tables (FK order)
+// ============================================
+export async function purgeAllData() {
+  await supabaseAdmin.from('query_sessions').delete().neq('session_id', '__never__')
+  await supabaseAdmin.from('knowledge_entries').delete().neq('entry_id', '00000000-0000-0000-0000-000000000000')
+  await supabaseAdmin.from('raw_transcripts').delete().neq('transcript_id', '00000000-0000-0000-0000-000000000000')
+  await supabaseAdmin.from('interview_sessions').delete().neq('session_id', '00000000-0000-0000-0000-000000000000')
+  await supabaseAdmin.from('materials').delete().neq('material_id', '00000000-0000-0000-0000-000000000000')
+  await supabaseAdmin.from('admin_queue').delete().neq('queue_id', '00000000-0000-0000-0000-000000000000')
+  await supabaseAdmin.from('sme_profiles').delete().neq('sme_id', '00000000-0000-0000-0000-000000000000')
+}
