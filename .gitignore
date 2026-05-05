@@ -30,3 +30,4 @@ npm-debug.log*
 *.swp
 *.swo
 .gstack/
+.vercel

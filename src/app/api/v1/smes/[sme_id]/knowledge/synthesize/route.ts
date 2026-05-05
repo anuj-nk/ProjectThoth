@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sme
         synthesized_answer: e.synthesized_answer,
         exposable_to_users: e.exposable_to_users ?? true,
         status: 'draft',
-        supporting_doc_ids: sourceDocs,
+        supporting_doc_ids: sourceDocs as any,
       })
       insertedIds.push(row.entry_id)
     }

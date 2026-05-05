@@ -11,10 +11,8 @@
 ```
 Prototype URL:       https://project-thoth.vercel.app
 Benchmark API base:  https://project-thoth.vercel.app/api/v1
-Benchmark API key:   [set BENCHMARK_API_KEY in evaluator env — see §Environment Variables]
+Benchmark API key:   0813a6f42677f5136a994a61a007847e6c8854db97a4343ce17a7eca313b32d7
 ```
-
-> The benchmark API key is passed as `Authorization: Bearer <key>` on every request. The key is stored server-side in `BENCHMARK_API_KEY`; contact the team to obtain it for evaluation.
 
 ---
 
