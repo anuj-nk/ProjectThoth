@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireBenchmarkAuth } from '@/lib/auth'
 import { smeApi } from '@/lib/supabase'
 import { dbSmeToSpec } from '@/lib/v1-mappers'
+import { normalizeDomain, VALID_DOMAINS } from '@/lib/taxonomy'
 
 export async function POST(req: NextRequest) {
   const authError = requireBenchmarkAuth(req)
@@ -15,9 +16,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields: name, specialization, sub_areas, contact_email', code: 'MISSING_FIELDS' }, { status: 400 })
     }
 
+    // P7: normalize `specialization` (which the benchmark sends as a
+    // display-form string like "Career Services" or "Student Wellbeing")
+    // into the canonical DB enum to avoid sme_profiles_domain_check 500s.
+    const canonicalDomain = normalizeDomain(specialization)
+    if (!canonicalDomain) {
+      return NextResponse.json(
+        {
+          error: `Invalid specialization "${specialization}". Allowed canonical values: ${VALID_DOMAINS.join(', ')}`,
+          code: 'INVALID_DOMAIN',
+        },
+        { status: 400 }
+      )
+    }
+
     const row = await smeApi.create({
       full_name: name,
-      domain: specialization,
+      domain: canonicalDomain,
       topics: Array.isArray(sub_areas) ? sub_areas : [sub_areas],
       email: contact_email,
       exclusions: [],

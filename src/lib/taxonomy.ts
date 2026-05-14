@@ -144,6 +144,71 @@ export function normalizeTopic(raw: string): string | null {
   return null
 }
 
+// ============================================
+// SME DOMAIN — keep aligned with the DB CHECK constraint
+// (sme_profiles.domain in supabase/migrations/001_initial_schema.sql)
+// ============================================
+export const VALID_DOMAINS = [
+  'academics',
+  'career_services',
+  'facilities',
+  'prototyping_lab',
+  'admissions',
+  'it_purchasing',
+  'student_wellbeing',
+  'other',
+] as const
+
+// Map common display-form / human-typed variants to the canonical enum value.
+// Anything not in this map but already-canonical passes through unchanged.
+const DOMAIN_ALIASES: Record<string, typeof VALID_DOMAINS[number]> = {
+  // career_services
+  'career services': 'career_services',
+  'careers': 'career_services',
+  'career': 'career_services',
+  'career_services_industry_engagement': 'career_services',
+  'career services & industry engagement': 'career_services',
+  // student_wellbeing
+  'student wellbeing': 'student_wellbeing',
+  'student well-being': 'student_wellbeing',
+  'wellbeing': 'student_wellbeing',
+  'wellness': 'student_wellbeing',
+  // facilities
+  'facility': 'facilities',
+  'fab lab': 'prototyping_lab',
+  'fabrication lab': 'prototyping_lab',
+  'prototyping': 'prototyping_lab',
+  'prototype lab': 'prototyping_lab',
+  // it_purchasing
+  'it': 'it_purchasing',
+  'purchasing': 'it_purchasing',
+  'it & purchasing': 'it_purchasing',
+  'it/purchasing': 'it_purchasing',
+  // academics
+  'academic': 'academics',
+  'academic services': 'academics',
+  // admissions
+  'admission': 'admissions',
+}
+
+// Normalize a domain string to the canonical DB enum value.
+// Returns null if it can't be mapped — caller should return a friendly 400
+// instead of letting Postgres throw a check-constraint error to the UI.
+export function normalizeDomain(raw: unknown): typeof VALID_DOMAINS[number] | null {
+  if (!raw || typeof raw !== 'string') return null
+  const lower = raw.toLowerCase().trim()
+  if (!lower) return null
+  // already-canonical (snake_case enum value)
+  if ((VALID_DOMAINS as readonly string[]).includes(lower)) return lower as typeof VALID_DOMAINS[number]
+  // exact alias
+  if (DOMAIN_ALIASES[lower]) return DOMAIN_ALIASES[lower]
+  // snake-cased version of input (e.g. "Career Services" -> "career_services")
+  const snake = lower.replace(/[\s\-/&]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')
+  if ((VALID_DOMAINS as readonly string[]).includes(snake)) return snake as typeof VALID_DOMAINS[number]
+  if (DOMAIN_ALIASES[snake]) return DOMAIN_ALIASES[snake]
+  return null
+}
+
 // Normalize an array of free-text topics, returning matched ids + unmatched strings
 export function normalizeTopics(raws: string[]): {
   matched: string[]

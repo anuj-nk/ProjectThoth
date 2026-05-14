@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { smeApi } from '@/lib/supabase'
 import { extractProfile } from '@/lib/claude'
-import { normalizeTopics } from '@/lib/taxonomy'
+import { normalizeTopics, normalizeDomain, VALID_DOMAINS } from '@/lib/taxonomy'
 import type { CreateSMEProfile } from '@/types'
 
 export async function POST(req: NextRequest) {
@@ -52,6 +52,19 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // P7: normalize domain before insert so display-form values
+    // ("Career Services") don't trip the Postgres CHECK constraint.
+    const canonicalDomain = normalizeDomain(domain)
+    if (!canonicalDomain) {
+      return NextResponse.json(
+        {
+          error: `Invalid domain "${domain}". Allowed values: ${VALID_DOMAINS.join(', ')}`,
+          code: 'INVALID_DOMAIN',
+        },
+        { status: 400 }
+      )
+    }
+
     const existing = await smeApi.getByEmail(email)
     if (existing) {
       return NextResponse.json({
@@ -65,7 +78,7 @@ export async function POST(req: NextRequest) {
       full_name,
       email,
       title: title || undefined,
-      domain,
+      domain: canonicalDomain,
       topics: topics || [],
       exclusions: exclusions || [],
       routing_preferences: routing_preferences || [],
