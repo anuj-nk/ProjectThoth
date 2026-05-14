@@ -59,6 +59,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sme
       1500
     )
 
+    const topicLower = topic.toLowerCase().replace(/\s+/g, '_')
+
     let entries: any[] = []
     try {
       const cleaned = llmResult.text.replace(/^```json\s*/im, '').replace(/\s*```$/im, '').trim()
@@ -67,13 +69,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sme
       entries = JSON.parse(cleaned.slice(start, end + 1))
       if (!Array.isArray(entries)) entries = [entries]
     } catch {
-      entries = [{ topic_tag: topic.toLowerCase().replace(/\s+/g, '_'), question_framing: `What should I know about ${topic}?`, synthesized_answer: combinedText.slice(0, 300), exposable_to_users: true }]
+      entries = [{ topic_tag: topicLower, question_framing: `What should I know about ${topic}?`, synthesized_answer: combinedText.slice(0, 300), exposable_to_users: true }]
     }
+
+    // Normalize topic_tag to text[] right after parsing so every downstream
+    // consumer (find / insert / response mapper) sees the same shape.
+    // The Postgres column is TEXT[]; raw strings cause "malformed array literal" 500s.
+    entries = entries.map((e: any) => {
+      const raw = e.topic_tag
+      const tags = Array.isArray(raw)
+        ? raw.map((t: any) => String(t).toLowerCase().replace(/\s+/g, '_')).filter(Boolean)
+        : [String(raw || topicLower).toLowerCase().replace(/\s+/g, '_')]
+      return { ...e, topic_tag: tags.length ? tags : [topicLower] }
+    })
 
     // Spec returns ONE entry. Pick the one whose topic_tag best matches the requested topic.
     // Our internal synthesis produces 4-6 entries; we pick the best match and save all, returning the best.
-    const topicLower = topic.toLowerCase().replace(/\s+/g, '_')
-    const best = entries.find((e: any) => (e.topic_tag || '').includes(topicLower.split('_')[0])) || entries[0]
+    const best = entries.find((e: any) =>
+      e.topic_tag.some((t: string) => t.includes(topicLower.split('_')[0]))
+    ) || entries[0]
 
     // Store source IDs as a structured object in supporting_doc_ids so GET /knowledge/{id}
     // can reconstruct sources correctly (spec requires interviews[] and materials[]).
@@ -84,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sme
     for (const e of entries) {
       const row = await kbApi.create({
         sme_id,
-        topic_tag: e.topic_tag,
+        topic_tag: e.topic_tag,        // text[] from normalization above
         question_framing: e.question_framing,
         synthesized_answer: e.synthesized_answer,
         exposable_to_users: e.exposable_to_users ?? true,
