@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "judge": "tsx scripts/local-judge.ts",
+    "judge:multi": "tsx scripts/local-judge.ts --only=multi-turn",
+    "judge:routing": "tsx scripts/local-judge.ts --only=routing"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",

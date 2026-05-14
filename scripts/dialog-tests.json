@@ -1,0 +1,170 @@
+[
+  {
+    "name": "Cat-A · grounded · CPT timeline",
+    "category": "grounded",
+    "turns": [
+      {
+        "q": "When should I start my CPT application?",
+        "expect": {
+          "response_type": "answer",
+          "must_cite_kb": true,
+          "must_not_fabricate": true
+        }
+      }
+    ]
+  },
+  {
+    "name": "Cat-A · grounded · TECHIN 601 fee",
+    "category": "grounded",
+    "turns": [
+      {
+        "q": "How much does TECHIN 601 cost per credit?",
+        "expect": {
+          "response_type": "answer",
+          "must_cite_kb": true,
+          "must_not_fabricate": true
+        }
+      }
+    ]
+  },
+  {
+    "name": "Cat-B · clarification · vague help request",
+    "category": "clarifying",
+    "turns": [
+      {
+        "q": "Can you help me?",
+        "expect": {
+          "response_type": "clarification"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Cat-C · routing · out of scope (housing)",
+    "category": "routing",
+    "turns": [
+      {
+        "q": "Where can I find affordable housing near GIX?",
+        "expect": {
+          "response_type": "routing",
+          "must_route_to_type": "admin"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Cat-C · routing · out of scope (mental health)",
+    "category": "routing",
+    "turns": [
+      {
+        "q": "I'm feeling overwhelmed and need mental health support. Who do I talk to?",
+        "expect": {
+          "response_type": "routing",
+          "must_route_to_type": "admin"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Cat-C · routing · valid SME match",
+    "category": "routing",
+    "turns": [
+      {
+        "q": "Who handles internship offer negotiation?",
+        "expect": {
+          "response_type": "routing",
+          "must_route_to_type": "sme"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Multi-turn · CPT then follow-up about OPT",
+    "category": "multi-turn",
+    "turns": [
+      {
+        "q": "When should I start my CPT application?",
+        "expect": { "response_type": "answer", "must_cite_kb": true }
+      },
+      {
+        "q": "What about for OPT? Is the timing different?",
+        "expect": {
+          "response_type": "answer",
+          "must_reference_prior": true,
+          "prior_topic": "CPT"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Multi-turn · clarifying back-and-forth",
+    "category": "multi-turn",
+    "turns": [
+      {
+        "q": "I have a question about my internship.",
+        "expect": { "response_type": "clarification" }
+      },
+      {
+        "q": "I want to know what paperwork I need before I start.",
+        "expect": { "response_type": "answer", "must_cite_kb": true }
+      }
+    ]
+  },
+  {
+    "name": "Multi-turn · pronoun resolution",
+    "category": "multi-turn",
+    "turns": [
+      {
+        "q": "How much does TECHIN 601 cost?",
+        "expect": { "response_type": "answer", "must_cite_kb": true }
+      },
+      {
+        "q": "Can I get a waiver for it?",
+        "expect": {
+          "response_type": "answer",
+          "must_reference_prior": true,
+          "prior_topic": "TECHIN 601"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Multi-turn · topic switch then return",
+    "category": "multi-turn",
+    "turns": [
+      {
+        "q": "When should I start my CPT application?",
+        "expect": { "response_type": "answer", "must_cite_kb": true }
+      },
+      {
+        "q": "Actually, what's a typical internship offer negotiation timeline?",
+        "expect": { "response_type": "answer" }
+      },
+      {
+        "q": "Going back to CPT, what was the deadline you mentioned?",
+        "expect": {
+          "response_type": "answer",
+          "must_reference_prior": true,
+          "prior_topic": "CPT"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Multi-turn · escalating from answer to routing",
+    "category": "multi-turn",
+    "turns": [
+      {
+        "q": "What's the standard TECHIN 601 fee?",
+        "expect": { "response_type": "answer", "must_cite_kb": true }
+      },
+      {
+        "q": "Can someone help me get a waiver because I'm in financial hardship?",
+        "expect": {
+          "response_type": "routing",
+          "must_reference_prior": true
+        }
+      }
+    ]
+  }
+]
