@@ -252,7 +252,7 @@ function InterviewFlow({ smeProfile, topicById, onComplete, onBack }: {
             <input
               type="text" value={topic} onChange={e => setTopic(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && startInterview()}
-              placeholder="e.g. CPT applications, Offer negotiation..."
+              placeholder="e.g. Equipment access, admissions review, vendor purchasing..."
               className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-white/30 text-sm focus:outline-none focus:border-[#e20074]/50"
             />
           </div>

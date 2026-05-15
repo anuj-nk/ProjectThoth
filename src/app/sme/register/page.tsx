@@ -71,7 +71,7 @@ export default function SMERegisterPage() {
 
   const [draft, setDraft] = useState<DraftProfile>({
     full_name: '', email: '', title: '',
-    domain: 'career_services',
+    domain: 'other',
     topics: [], exclusions: [], routing_preferences: []
   })
 
@@ -154,7 +154,7 @@ export default function SMERegisterPage() {
         full_name: p.full_name || '',
         email: p.email || '',
         title: p.title || '',
-        domain: p.domain || 'career_services',
+        domain: p.domain || 'other',
         topics: p.topics || [],
         exclusions: p.exclusions || [],
         routing_preferences: p.routing_preferences || []
@@ -186,7 +186,7 @@ export default function SMERegisterPage() {
       setSmeId(sme.sme_id)
 
       // Create interview session
-      const topic = draft.topics[0] || 'general'
+      const topic = draft.topics[0] || draft.domain || 'general_sme'
       const ivRes = await fetch('/api/sme/interview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -370,11 +370,11 @@ export default function SMERegisterPage() {
           <Card>
             <StageLabel>Step 1 · Tell me about yourself</StageLabel>
             <h1 style={h1Style}>Welcome to Thoth</h1>
-            <p style={subtitleStyle}>I'll help you share your knowledge with GIX students — without filling out a 20-field form. Paste anything that describes your role and I'll figure out the rest.</p>
+            <p style={subtitleStyle}>I'll help you share your knowledge without filling out a 20-field form. Paste anything that describes your role and I'll figure out the rest.</p>
             <h2 style={h2Style}>What can I paste?</h2>
             <div style={hintBoxStyle}>
               <div style={{ fontSize: 15, color: 'var(--text-2)' }}>
-                <div style={{ padding: '2px 0' }}>• A link to your GIX profile page or LinkedIn</div>
+                <div style={{ padding: '2px 0' }}>• A link to your profile page or LinkedIn</div>
                 <div style={{ padding: '2px 0' }}>• A job description or bio paragraph</div>
                 <div style={{ padding: '2px 0' }}>• Or just describe your role in a few sentences</div>
               </div>
@@ -383,7 +383,7 @@ export default function SMERegisterPage() {
               rows={4}
               value={rawInput}
               onChange={e => setRawInput(e.target.value)}
-              placeholder="https://gix.uw.edu/about/people/... or paste a description..."
+              placeholder="Paste a profile link, bio, email signature, or role description..."
               style={textareaStyle}
             />
             {extractError && <div style={errorStyle}>{extractError}</div>}
@@ -494,7 +494,7 @@ export default function SMERegisterPage() {
           <Card>
             <StageLabel>Step 3 · Boundaries &amp; routing</StageLabel>
             <h1 style={h1Style}>A few more questions</h1>
-            <p style={subtitleStyle}>This helps Thoth route students to you — and only to you — when it's actually your area.</p>
+            <p style={subtitleStyle}>This helps Thoth route people to you — and only to you — when it's actually your area.</p>
 
             <h2 style={{ ...h2Style, marginTop: 12 }}>Which topics are NOT your responsibility?</h2>
             <p style={{ fontSize: 15, color: 'var(--text-2)', marginBottom: 12 }}>Check anything outside your scope. Leave things you DO own unchecked.</p>
@@ -714,7 +714,7 @@ export default function SMERegisterPage() {
 
             {/* Transcript note */}
             <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--beige)', borderRadius: 6, fontSize: 14, color: 'var(--text-2)', borderLeft: '3px solid var(--text-3)' }}>
-              Raw interview transcript stored internally for audit — never shown to students.
+              Raw interview transcript stored internally for audit — never shown to end users.
             </div>
 
             <BtnRow style={{ marginTop: 20 }}>
@@ -738,7 +738,7 @@ export default function SMERegisterPage() {
             </div>
             <h1 style={h1Style}>You're all set, {draft.full_name.split(' ')[0]}!</h1>
             <p style={{ ...subtitleStyle, maxWidth: 520, margin: '0 auto 24px' }}>
-              {approvedCount} {approvedCount === 1 ? 'entry is' : 'entries are'} pending admin review. Once published, students asking about your topics will get cited answers from your expertise.
+              {approvedCount} {approvedCount === 1 ? 'entry is' : 'entries are'} pending admin review. Once published, people asking about your topics will get cited answers from your expertise.
             </p>
             <div style={{ background: 'var(--beige)', borderRadius: 8, padding: '16px 20px', maxWidth: 520, margin: '0 auto 24px', textAlign: 'left', fontSize: 15 }}>
               <div style={{ fontWeight: 600, marginBottom: 8 }}>What happens next</div>
@@ -1018,7 +1018,7 @@ function EntryCard({ state, topicById, onChange, onApprove, onReject }: {
         <>
           <div style={{ fontSize: 15, color: 'var(--text-1)', lineHeight: 1.6 }}>{answer}</div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', fontSize: 15, color: 'var(--text-2)', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
-            <span>{entry.exposable_to_users ? '👁 Exposable to students' : '🔒 Internal only — students see routing message'}</span>
+            <span>{entry.exposable_to_users ? '👁 Exposable to end users' : '🔒 Internal only — end users see routing message'}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
             <button onClick={() => setEditing(true)} style={{ ...btnTertiary, padding: '6px 12px', fontSize: 12 }}>Edit</button>

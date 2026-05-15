@@ -12,7 +12,7 @@ import path from 'path'
 import yaml from 'js-yaml'
 import type { InterviewMessage } from '../types'
 
-const seedPath = path.join(process.cwd(), 'src/data/seed_questions/career_services.yaml')
+const seedPath = path.join(process.cwd(), 'src/data/seed_questions/general_sme.yaml')
 const seed = yaml.load(fs.readFileSync(seedPath, 'utf8')) as any
 
 // ─── LLM caller with OpenRouter → Groq fallback ────────────
@@ -127,25 +127,25 @@ RULES:
 }
 
 // ─── SME system prompt ──────────────────────────────────────
-const SME_PROMPT = `You are Patrick Chidsey, Assistant Director of Career Services & Industry Engagement at GIX (University of Washington).
+const SME_PROMPT = `You are Morgan Lee, Prototyping Lab Manager for an interdisciplinary university program.
 
 You are being interviewed by Thoth, an AI knowledge capture system. Answer naturally and helpfully, as if speaking to a colleague. Keep answers to 3-5 sentences.
 
 Your knowledge:
-- CPT applications: students must register for TECHIN 601 ($59/credit) FIRST, then file CPT at least 90 days before internship start
-- OPT general guidance (but visa-specific questions go to ISS)
-- Internship offer evaluation, negotiation, red flags to watch for
-- Industry partner relationships, employer intelligence
-- Resume reviews, interview prep, Handshake platform
+- Equipment access requests: users need safety training, badge access, and machine-specific checkout before using equipment
+- Laser cutters, 3D printers, electronics benches, and basic shop tools
+- Common mistakes: skipping orientation, reserving machines without approved material, and assuming staff can approve unsafe workarounds
+- Incident reporting, maintenance windows, and escalation paths for broken tools
+- Supporting documents: safety checklist, machine reservation guide, approved materials list
 
 What you do NOT own (redirect to others):
-- F-1 visa status, travel restrictions, SEVIS → International Student Services (ISS)
-- Academic advising, course selection → Kara or Jason
-- Entrepreneurship / venture tracks → entrepreneurship team
+- Academic project grading → course instructors
+- Purchasing approvals above standard supply limits → operations or finance
+- Building-wide after-hours access exceptions → facilities and security
 
-Be specific and concrete. Mention edge cases and things students commonly get wrong.
+Be specific and concrete. Mention edge cases and things users commonly get wrong.
 
-Use ABSOLUTELY NO Asterisks! Do not say "As an AI language model" or "I don't have personal experience". Speak as if you are the real Patrick sharing your expertise.`
+Use ABSOLUTELY NO Asterisks! Do not say "As an AI language model" or "I don't have personal experience". Speak as if you are Morgan sharing your expertise.`
 
 // ─── Main ──────────────────────────────────────────────────
 async function main() {
@@ -159,7 +159,7 @@ async function main() {
   console.log('\n================================================')
   console.log('PROJECT THOTH — Fully Automated Interview Sim')
   console.log(`Domain: ${seed.domain_label}`)
-  console.log('Simulated SME: Patrick Chidsey')
+  console.log('Simulated SME: Morgan Lee')
   console.log('================================================\n')
 
   // Turn 1: Thoth opens
@@ -179,7 +179,7 @@ async function main() {
     const smeResponse = await callLLM(SME_PROMPT, smeMessages, 'SME  ')
     smeMessages.push({ role: 'assistant', content: smeResponse })
     transcript.push({ role: 'sme', content: smeResponse, timestamp: new Date().toISOString() })
-    console.log(`👤 Patrick: ${smeResponse}\n`)
+    console.log(`👤 Morgan: ${smeResponse}\n`)
 
     if (turn >= MAX_TURNS) { console.log('⚠️  Max turns reached.'); break }
 

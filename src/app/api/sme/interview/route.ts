@@ -4,21 +4,10 @@
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'node:fs'
-import path from 'node:path'
-import yaml from 'js-yaml'
-import { conductInterview, synthesizeKBEntries } from '@/lib/claude'
+import { conductInterview, generateInterviewPlan, synthesizeKBEntries } from '@/lib/claude'
+import { loadSeedQuestionLibrary } from '@/lib/interview-seeds'
 import { interviewApi, kbApi, transcriptApi, smeApi } from '@/lib/supabase'
 import type { InterviewMessage } from '@/types'
-
-function loadSeedQuestions(domain: string = 'career_services'): string {
-  const fileName = `${domain}.yaml`
-  const seedPath = path.join(process.cwd(), 'src/data/seed_questions', fileName)
-  const fallbackPath = path.join(process.cwd(), 'src/data/seed_questions/career_services.yaml')
-  const raw = fs.readFileSync(fs.existsSync(seedPath) ? seedPath : fallbackPath, 'utf8')
-  const parsed = yaml.load(raw)
-  return yaml.dump(parsed)
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,10 +25,16 @@ export async function POST(req: NextRequest) {
 
       const session = await interviewApi.create(sme_id)
       const sme = await smeApi.getById(sme_id)
-      const seedQuestions = loadSeedQuestions(sme?.domain || 'career_services')
+      const seedLibrary = loadSeedQuestionLibrary(sme?.domain || 'general_sme')
+      const interviewPlan = await generateInterviewPlan(sme, topic, seedLibrary.content)
 
       // Get first question from Claude
-      const firstMessage = await conductInterview([], `We are capturing knowledge about "${topic}".`, seedQuestions)
+      const firstMessage = await conductInterview(
+        [],
+        `We are capturing knowledge about "${topic}".`,
+        seedLibrary.content,
+        { smeProfile: sme, interviewPlan, topic }
+      )
 
       const messages: InterviewMessage[] = [{
         role: 'assistant',
@@ -49,7 +44,12 @@ export async function POST(req: NextRequest) {
 
       // Store topic in draft_profile; move to active stage
       await interviewApi.update(session.session_id, {
-        draft_profile: { topic, seed_questions: seedQuestions },
+        draft_profile: {
+          topic,
+          seed_questions: seedLibrary.content,
+          seed_source: seedLibrary.source,
+          generated_interview_plan: interviewPlan
+        },
         stage: 'interview_active',
         message_history: messages
       })
@@ -84,8 +84,19 @@ export async function POST(req: NextRequest) {
         }
       ]
 
-      const seedQuestions = (session.draft_profile as any)?.seed_questions || loadSeedQuestions()
-      const assistantResponse = await conductInterview(updatedMessages, '', seedQuestions)
+      const sme = await smeApi.getById(session.sme_id)
+      const draftProfile = session.draft_profile as any
+      const seedQuestions = draftProfile?.seed_questions || loadSeedQuestionLibrary(sme?.domain || 'general_sme').content
+      const assistantResponse = await conductInterview(
+        updatedMessages,
+        '',
+        seedQuestions,
+        {
+          smeProfile: sme,
+          interviewPlan: draftProfile?.generated_interview_plan || [],
+          topic: draftProfile?.topic
+        }
+      )
 
       const isComplete = assistantResponse.toLowerCase().includes('let me prepare a summary')
         || assistantResponse.toLowerCase().includes('solid understanding')

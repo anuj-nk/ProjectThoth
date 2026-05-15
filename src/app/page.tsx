@@ -164,15 +164,15 @@ function Landing({ onSelect }: { onSelect: (s: AppSession) => void }) {
                 I&apos;m here to learn.
               </h2>
               <p className="text-sm text-ink-500 mb-5 leading-relaxed">
-                Get instant, cited answers from the GIX knowledge base — or be connected directly to the right expert.
+                Get instant, cited answers from the knowledge base — or be connected directly to the right expert.
               </p>
 
               <ul className="space-y-2.5 mb-8 flex-1">
                 {[
-                  'GIX Program Details',
-                  'Career Resources & CPT / OPT',
-                  'Admissions & Scholarships',
-                  'Facilities & Prototyping Lab',
+                  'Program and policy details',
+                  'Operational processes',
+                  'Facilities and resource access',
+                  'Expert-owned edge cases',
                 ].map(item => (
                   <li key={item} className="flex items-center gap-2.5 text-sm text-ink-700">
                     <CheckCircle className="size-4 text-magenta-500 shrink-0" strokeWidth={2} />
@@ -201,7 +201,7 @@ function Landing({ onSelect }: { onSelect: (s: AppSession) => void }) {
                 I&apos;m here to contribute.
               </h2>
               <p className="text-sm text-ink-500 mb-5 leading-relaxed">
-                Share your expertise through AI-guided interviews. Your knowledge becomes searchable, cited answers for the GIX community.
+                Share your expertise through AI-guided interviews. Your knowledge becomes searchable, cited answers for the community.
               </p>
 
               <ul className="space-y-2.5 mb-8 flex-1">
@@ -239,7 +239,7 @@ function Landing({ onSelect }: { onSelect: (s: AppSession) => void }) {
                       value={smeEmail}
                       onChange={e => setSmeEmail(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && handleSMELogin()}
-                      placeholder="your.email@gix.uw.edu"
+                      placeholder="your.email@example.com"
                       className="flex-1 min-w-0 px-4 py-3 rounded-full border border-ink-300 bg-white
                                  text-ink-900 placeholder:text-ink-400 text-sm
                                  focus:outline-none focus:border-magenta-500 focus:ring-2 focus:ring-magenta-500/20
@@ -273,7 +273,7 @@ function Landing({ onSelect }: { onSelect: (s: AppSession) => void }) {
       {/* ── Footer ── */}
       <footer className="shrink-0 pb-2">
         <p className="text-center text-xs text-ink-400 py-4">
-          PoC Demo — Project Thoth v0.1. Demoing GIX content for T-Mobile internal PoC.
+          PoC Demo — Project Thoth v0.1. Adaptive SME knowledge capture for T-Mobile internal PoC.
         </p>
         <div className="h-1.5 bg-magenta-500 w-full" />
       </footer>

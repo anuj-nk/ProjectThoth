@@ -1,6 +1,6 @@
 // ============================================
 // TEST SCRIPT: Seed-Driven Interview
-// Loads career_services.yaml and drives the
+// Loads general_sme.yaml and drives the
 // interview using the actual seed questions
 //
 // Run with:
@@ -14,7 +14,7 @@ import readline from 'readline'
 import type { InterviewMessage } from '../types'
 
 // Load seed questions
-const seedPath = path.join(process.cwd(), 'src/data/seed_questions/career_services.yaml')
+const seedPath = path.join(process.cwd(), 'src/data/seed_questions/general_sme.yaml')
 const seed = yaml.load(fs.readFileSync(seedPath, 'utf8')) as any
 
 // Build system prompt from seed questions
@@ -25,7 +25,7 @@ function buildInterviewPrompt(seed: any): string {
   return `You are Thoth, a knowledge capture assistant for Project Thoth.
 
 Your job is to interview a Subject Matter Expert (SME) about "${seed.domain_label}".
-Reference SME: ${seed.reference_sme}
+Reference SME type: ${seed.reference_sme}
 
 You have a library of seed questions organized by category. Use them as your guide.
 Ask ONE question at a time. Be conversational. Generate dynamic follow-ups based on answers.

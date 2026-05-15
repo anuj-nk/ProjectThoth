@@ -1,0 +1,103 @@
+# Thoth Seed Question Library
+# Domain: General SME Onboarding
+# Version: 0.1
+#
+# This file is a domain-neutral playbook. The LLM should adapt these
+# questions to the SME's role, selected domain, selected topics, exclusions,
+# prior answers, and uploaded materials. It should not ask them verbatim
+# when a more specific question would be clearer.
+
+domain: general_sme
+domain_label: "General SME Onboarding"
+reference_sme: "Any subject matter expert"
+
+opening_questions:
+  - id: op_01
+    question_template: "What responsibility, process, or recurring question should we capture first for {audience}?"
+    targets: [scope_selection, priority_topic]
+
+  - id: op_02
+    question_template: "When someone comes to you about {topic}, what are they usually trying to accomplish?"
+    targets: [user_intent, outcome_mapping]
+
+  - id: op_03
+    question_template: "Walk me through the process someone usually follows for {topic}. Where do people get stuck?"
+    targets: [process_knowledge, common_mistakes]
+
+tacit_knowledge_probes:
+  - id: tk_01
+    question_template: "What do people commonly misunderstand about {topic}, even after reading the official instructions?"
+    targets: [misconceptions, undocumented_context]
+
+  - id: tk_02
+    question_template: "Tell me about a recent case involving {topic} where the right answer was not obvious. What made it tricky?"
+    targets: [edge_cases, decision_heuristics]
+
+  - id: tk_03
+    question_template: "What signs tell you that a request about {topic} is simple versus one that needs expert judgment?"
+    targets: [triage_rules, escalation_signals]
+
+  - id: tk_04
+    question_template: "What do you find yourself repeating most often when helping people with {topic}?"
+    targets: [high_volume_faq, repeated_guidance]
+
+boundary_probes:
+  - id: bd_01
+    question_template: "What parts of {topic} are outside your responsibility, and who should own those instead?"
+    targets: [scope_boundary, alternate_owner]
+
+  - id: bd_02
+    question_template: "Where does {topic} overlap with another team or expert? How should Thoth decide where to route those questions?"
+    targets: [cross_sme_overlap, routing_map]
+
+  - id: bd_03
+    question_template: "Are there questions about {topic} that Thoth should never answer directly, even if it has related knowledge?"
+    targets: [hard_route_cases, safety_boundary]
+
+evidence_probes:
+  - id: ev_01
+    question_template: "Do you have a checklist, template, policy page, slide deck, email, or other document that supports this answer?"
+    expected_artifact: "Supporting document, template, checklist, policy page, or example"
+    targets: [evidence_capture, citation_source]
+
+  - id: ev_02
+    question_template: "What resource would you point someone to first for {topic}, and what does that resource not explain well?"
+    expected_artifact: "Primary resource plus expert caveat"
+    targets: [resource_capture, gap_detection]
+
+exposure_policy_probes:
+  - id: ex_01
+    question_template: "For the topics we discussed, which are safe for Thoth to answer directly and which should route to you or another expert?"
+    targets: [exposure_rules, routing_override]
+
+  - id: ex_02
+    question_template: "Are any details sensitive, internal-only, case-by-case, or dependent on personal circumstances?"
+    targets: [sensitivity_policy, individual_context_required]
+
+maintenance_probes:
+  - id: mt_01
+    question_template: "How often does this information change, and when should Thoth ask you to review it?"
+    targets: [review_cadence, freshness]
+
+  - id: mt_02
+    question_template: "Are there predictable moments when this knowledge changes, such as a new cycle, quarter, vendor update, policy change, or launch?"
+    targets: [scheduled_refresh_triggers]
+
+closing:
+  - id: cl_01
+    question_template: "What important question about {topic} did I not ask?"
+    targets: [gap_catch, missed_topics]
+
+  - id: cl_02
+    question_template: "I will synthesize this into reviewable knowledge entries. Is there anything you want marked as route-only before I do that?"
+    targets: [transition_to_synthesis, exposure_confirmation]
+    type: confirmation
+
+orchestration_notes: |
+  - Treat this YAML as a playbook, not a script.
+  - Replace placeholders like {topic} and {audience} using the SME profile and transcript.
+  - Ask one question at a time.
+  - Start specific: role + selected topic + likely user goal.
+  - Always cover boundaries, evidence, exposure policy, and maintenance before closing.
+  - If the SME reveals a new topic that is not in the taxonomy, ask one clarifying question and preserve the original wording for admin review.
+  - When complete, say exactly: "I think I have a solid understanding. Let me prepare a summary for your review."

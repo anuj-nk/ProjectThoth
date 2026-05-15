@@ -27,7 +27,7 @@ checks.push([
 
 checks.push([
   'interview orchestrator loads runtime seed questions',
-  interviewRoute.includes('loadSeedQuestions') && interviewRoute.includes('seed_questions'),
+  interviewRoute.includes('loadSeedQuestionLibrary') && interviewRoute.includes('seed_questions'),
 ])
 
 checks.push([

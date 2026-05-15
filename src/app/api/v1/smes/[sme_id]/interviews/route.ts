@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireBenchmarkAuth } from '@/lib/auth'
 import { smeApi, interviewApi, interviewV1Api } from '@/lib/supabase'
 import { dbInterviewToSpec } from '@/lib/v1-mappers'
+import { generateInterviewPlan } from '@/lib/claude'
+import { loadSeedQuestionLibrary } from '@/lib/interview-seeds'
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ sme_id: string }> }) {
   const authError = requireBenchmarkAuth(req)
@@ -15,8 +17,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sme
     const body = await req.json()
     if (!body.topic) return NextResponse.json({ error: 'Missing required field: topic', code: 'MISSING_FIELDS' }, { status: 400 })
 
+    const seedLibrary = loadSeedQuestionLibrary(sme.domain || 'general_sme')
+    const interviewPlan = await generateInterviewPlan(sme, body.topic, seedLibrary.content)
     const row = await interviewV1Api.create(sme_id, body.topic)
-    return NextResponse.json(dbInterviewToSpec(row), { status: 201 })
+    const updatedRow = await interviewApi.update(row.session_id, {
+      draft_profile: {
+        topic: body.topic,
+        seed_questions: seedLibrary.content,
+        seed_source: seedLibrary.source,
+        generated_interview_plan: interviewPlan,
+      },
+    })
+    return NextResponse.json(dbInterviewToSpec(updatedRow), { status: 201 })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }

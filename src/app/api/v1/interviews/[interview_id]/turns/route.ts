@@ -1,48 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
-import yaml from 'js-yaml'
 import { requireBenchmarkAuth } from '@/lib/auth'
 import { smeApi, interviewApi, interviewV1Api } from '@/lib/supabase'
 import { callLLM, SME_INTERVIEW_SYSTEM_PROMPT } from '@/lib/claude'
-
-// P6: load the per-domain seed question library so interview turns are
-// guided by the curated YAML instead of the LLM guessing what to ask next.
-// Mirrors the loader already used by the non-v1 /api/sme/interview route.
-function loadSeedQuestions(domain: string = 'career_services'): string {
-  const fileName = `${domain}.yaml`
-  const seedPath = path.join(process.cwd(), 'src/data/seed_questions', fileName)
-  const fallbackPath = path.join(process.cwd(), 'src/data/seed_questions/career_services.yaml')
-  const target = fs.existsSync(seedPath) ? seedPath : fallbackPath
-  try {
-    const raw = fs.readFileSync(target, 'utf8')
-    return yaml.dump(yaml.load(raw))
-  } catch {
-    return ''
-  }
-}
+import { buildAdaptiveInterviewPrompt, loadSeedQuestionLibrary } from '@/lib/interview-seeds'
 
 // P6: build a focused system prompt that pins the interview to a specific
 // topic AND injects the seed question library. Without this the v1 turns
 // endpoint produced unfocused, random-feeling questions because the LLM
 // had no topic anchor and no curated question pool to draw from.
-function buildFocusedInterviewPrompt(topic: string, seedQuestions: string): string {
-  const topicBlock = topic
-    ? `\nTHIS INTERVIEW IS SCOPED TO TOPIC: "${topic}"
-- Do NOT ask the SME to pick a topic; they already chose "${topic}".
-- Stay on this topic. If the SME drifts, gently bring them back.
-- Skip Phase 1 (topic selection). Open with a Phase 2 question focused on "${topic}".\n`
-    : ''
+function buildFocusedInterviewPrompt(
+  topic: string,
+  seedQuestions: string,
+  sme: any,
+  interviewPlan: string[]
+): string {
+  return `${SME_INTERVIEW_SYSTEM_PROMPT}
 
-  const seedBlock = seedQuestions?.trim()
-    ? `\nDOMAIN SEED QUESTION LIBRARY (use as your interview guide):
-Pick the best next question from this library based on the SME's prior answer.
-Do not ask every question. Ask ONE question at a time. Adapt wording to context.
-
-${seedQuestions}\n`
-    : ''
-
-  return `${SME_INTERVIEW_SYSTEM_PROMPT}${topicBlock}${seedBlock}`
+${buildAdaptiveInterviewPrompt({
+  topic,
+  seedQuestions,
+  smeProfile: sme,
+  interviewPlan,
+})}`
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ interview_id: string }> }) {
@@ -60,11 +39,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ int
     const history: any[] = session.message_history || []
     const turnNumber = Math.floor(history.filter((m: any) => m.role === 'user').length) + 1
 
-    // P6: load SME's domain so we hit the right seed file (falls back to career_services)
+    // Load SME's domain so we hit a domain seed when present, then fall back
+    // to the adaptive general SME onboarding playbook.
     const sme = await smeApi.getById((session as any).sme_id)
-    const topic = String((session as any).topic || '')
-    const seedQuestions = loadSeedQuestions(sme?.domain || 'career_services')
-    const systemPrompt = buildFocusedInterviewPrompt(topic, seedQuestions)
+    const draftProfile = (session as any).draft_profile || {}
+    const topic = String((session as any).topic || draftProfile.topic || '')
+    const seedQuestions = draftProfile.seed_questions || loadSeedQuestionLibrary(sme?.domain || 'general_sme').content
+    const systemPrompt = buildFocusedInterviewPrompt(
+      topic,
+      seedQuestions,
+      sme,
+      Array.isArray(draftProfile.generated_interview_plan) ? draftProfile.generated_interview_plan : []
+    )
 
     // Build message history for LLM
     const llmMessages = history.map((m: any) => ({

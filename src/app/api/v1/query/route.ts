@@ -59,7 +59,7 @@ Q: ${e.question_framing}
 A: ${e.synthesized_answer}`
       }).join('\n\n')
 
-      const systemPrompt = `You are Thoth, a knowledge assistant for GIX students.
+      const systemPrompt = `You are Thoth, a knowledge assistant for end users.
 
 CRITICAL RULES (you will be graded on these):
 1. Every factual sentence MUST end with a citation marker like [KB-1] or [KB-2,3]

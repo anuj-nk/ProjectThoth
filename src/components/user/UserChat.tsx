@@ -93,7 +93,7 @@ export default function UserChat({ sessionId }: { sessionId: string }) {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && sendMessage()}
-            placeholder="Ask anything about GIX, Career Services, CPT, OPT…"
+            placeholder="Ask a question from the approved knowledge base..."
             style={{
               width: '100%',
               paddingLeft: 22,

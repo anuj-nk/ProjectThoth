@@ -3,6 +3,8 @@
 // Provider order: OpenRouter free → Groq fallback
 // ============================================
 
+import { buildAdaptiveInterviewPrompt } from '@/lib/interview-seeds'
+
 export type LlmUsage = {
   prompt_tokens: number
   completion_tokens: number
@@ -279,7 +281,7 @@ Required format:
 Rules:
 - Use exact domain values listed above
 - If a field is uncertain, mark it low confidence — do NOT fabricate
-- topics should be specific (e.g. "CPT timeline" not just "visas")
+- topics should be specific (e.g. "equipment access process" not just "operations")
 - exclusions are topics this person explicitly does NOT own`
 
 function buildProfileExtractionPrompt(domainValues?: string[]): string {
@@ -343,6 +345,74 @@ Use these runtime-loaded seed questions as your interview guide. Do not ask ever
 ${seedQuestions}`
 }
 
+function fallbackInterviewPlan(topic: string, smeProfile?: Partial<SMERow>): string[] {
+  const label = topic || smeProfile?.topics?.[0] || 'the SME selected topic'
+  return [
+    `Clarify what "${label}" covers and what outcome people usually want.`,
+    `Walk through the normal process for "${label}" from first request to resolution.`,
+    `Identify the most common mistakes, misconceptions, or missing steps.`,
+    `Capture tacit judgment: edge cases, triage rules, and when expert review is needed.`,
+    `Map boundaries: what is outside this SME's ownership and who owns adjacent topics.`,
+    `Ask for supporting documents, templates, policies, examples, or links.`,
+    `Decide which answers are safe to expose directly and which should route to an expert.`,
+    `Set a review cadence and identify predictable moments when this knowledge changes.`,
+  ]
+}
+
+export async function generateInterviewPlan(
+  smeProfile: Partial<SMERow> | null,
+  topic: string,
+  seedQuestions: string
+): Promise<string[]> {
+  const fallback = fallbackInterviewPlan(topic, smeProfile || undefined)
+
+  try {
+    const systemPrompt = `You generate concise interview plans for Project Thoth SME onboarding.
+
+Return ONLY valid JSON. No markdown, no prose.
+
+Required format:
+{
+  "questions": [
+    "question 1",
+    "question 2"
+  ]
+}
+
+Rules:
+- Generate 8-12 questions.
+- Adapt the general seed playbook to the SME's role, domain, topics, exclusions, and selected interview topic.
+- Questions must be specific enough to feel written for this SME.
+- Cover scope, process, tacit knowledge, boundaries, evidence, exposure policy, and maintenance.
+- Do not assume the SME owns a topic listed in exclusions.
+- Do not mention internal implementation details like taxonomy, YAML, embeddings, or JSON.`
+
+    const text = await askLLMText(
+      systemPrompt,
+      [{
+        role: 'user',
+        content: JSON.stringify({
+          selected_topic: topic,
+          sme_profile: smeProfile,
+          general_seed_question_playbook: seedQuestions,
+        }, null, 2),
+      }],
+      1200
+    )
+
+    const parsed = parseJSON<{ questions?: unknown }>(text, { questions: fallback })
+    if (!Array.isArray(parsed.questions)) return fallback
+
+    const questions = parsed.questions
+      .filter((question): question is string => typeof question === 'string' && question.trim().length > 0)
+      .map(question => question.trim())
+
+    return questions.length > 0 ? questions.slice(0, 12) : fallback
+  } catch {
+    return fallback
+  }
+}
+
 // ============================================
 // PROMPT: KB ENTRY SYNTHESIZER (D1)
 // ============================================
@@ -363,7 +433,7 @@ Required format:
 ]
 
 Rules:
-- topic_tag must be snake_case (e.g. "cpt_timeline", "internship_eligibility")
+- topic_tag must be snake_case (e.g. "equipment_access", "policy_exception_process")
 - question_framing should sound like a real user question
 - synthesized_answer must be 2-4 sentences — no padding, no filler
 - exposable_to_users: false if the SME flagged this topic as sensitive or internal-only
@@ -434,7 +504,12 @@ export async function extractProfile(rawInput: string, domainValues?: string[]):
 export async function conductInterview(
   messages: InterviewMessage[],
   smeInput: string,
-  seedQuestions?: string
+  seedQuestions?: string,
+  options?: {
+    smeProfile?: Partial<SMERow> | null
+    interviewPlan?: string[]
+    topic?: string
+  }
 ): Promise<string> {
   const history = messages.map(m => ({
     role: m.role === 'sme' ? 'user' as const : 'assistant' as const,
@@ -443,7 +518,13 @@ export async function conductInterview(
   const fullMessages = history.length > 0
     ? history
     : [{ role: 'user' as const, content: smeInput || 'Hello, ready to start.' }]
-  return askLLMText(buildInterviewSystemPrompt(seedQuestions), fullMessages, 400)
+  const adaptivePrompt = buildAdaptiveInterviewPrompt({
+    topic: options?.topic,
+    seedQuestions,
+    smeProfile: options?.smeProfile,
+    interviewPlan: options?.interviewPlan,
+  })
+  return askLLMText(`${buildInterviewSystemPrompt(seedQuestions)}\n\n${adaptivePrompt}`, fullMessages, 400)
 }
 
 export async function synthesizeKBEntries(
