@@ -204,10 +204,10 @@ Return ONLY a JSON object (no prose, no code fences):
     console.log(`  ${String(Math.round(r.avg)).padStart(3, ' ')}  [${r.category.padEnd(10)}]  ${r.name}`)
   }
   console.log('─'.repeat(72))
-  for (const [cat, scores] of byCategory) {
+  byCategory.forEach((scores, cat) => {
     const a = scores.reduce((x, y) => x + y, 0) / scores.length
     console.log(`  ${String(Math.round(a)).padStart(3, ' ')}  [${cat}]  ${scores.length} cases`)
-  }
+  })
   console.log('─'.repeat(72))
   console.log(`  OVERALL: ${overall.toFixed(1)} / 100   (threshold: ${PASS_THRESHOLD})`)
   console.log('═'.repeat(72))

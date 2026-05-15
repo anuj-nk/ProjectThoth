@@ -282,6 +282,21 @@ Rules:
 - topics should be specific (e.g. "CPT timeline" not just "visas")
 - exclusions are topics this person explicitly does NOT own`
 
+function buildProfileExtractionPrompt(domainValues?: string[]): string {
+  if (!domainValues?.length) return PROFILE_EXTRACTION_SYSTEM_PROMPT
+
+  const domains = domainValues.join(' | ')
+  return PROFILE_EXTRACTION_SYSTEM_PROMPT
+    .replace(
+      '"domain": "one of: academics | career_services | facilities | prototyping_lab | admissions | it_purchasing | student_wellbeing | other"',
+      `"domain": "one of: ${domains}"`
+    )
+    .replace(
+      '- Use exact domain values listed above',
+      `- Use exact domain values listed above: ${domains}`
+    )
+}
+
 // ============================================
 // PROMPT: SME INTERVIEW CONDUCTOR (B2)
 // ============================================
@@ -402,9 +417,9 @@ Return ONLY valid JSON, no markdown:
 // EXPORTED FUNCTIONS
 // ============================================
 
-export async function extractProfile(rawInput: string): Promise<any> {
+export async function extractProfile(rawInput: string, domainValues?: string[]): Promise<any> {
   const text = await askLLMText(
-    PROFILE_EXTRACTION_SYSTEM_PROMPT,
+    buildProfileExtractionPrompt(domainValues),
     [{ role: 'user', content: rawInput }],
     800
   )

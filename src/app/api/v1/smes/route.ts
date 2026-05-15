@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireBenchmarkAuth } from '@/lib/auth'
 import { smeApi } from '@/lib/supabase'
 import { dbSmeToSpec } from '@/lib/v1-mappers'
-import { normalizeDomain, VALID_DOMAINS } from '@/lib/taxonomy'
+import { getDomainValues, normalizeDomainFromDb } from '@/lib/taxonomy-db'
 
 export async function POST(req: NextRequest) {
   const authError = requireBenchmarkAuth(req)
@@ -19,11 +19,12 @@ export async function POST(req: NextRequest) {
     // P7: normalize `specialization` (which the benchmark sends as a
     // display-form string like "Career Services" or "Student Wellbeing")
     // into the canonical DB enum to avoid sme_profiles_domain_check 500s.
-    const canonicalDomain = normalizeDomain(specialization)
+    const canonicalDomain = await normalizeDomainFromDb(specialization)
     if (!canonicalDomain) {
+      const domains = await getDomainValues()
       return NextResponse.json(
         {
-          error: `Invalid specialization "${specialization}". Allowed canonical values: ${VALID_DOMAINS.join(', ')}`,
+          error: `Invalid specialization "${specialization}". Allowed canonical values: ${domains.join(', ')}`,
           code: 'INVALID_DOMAIN',
         },
         { status: 400 }

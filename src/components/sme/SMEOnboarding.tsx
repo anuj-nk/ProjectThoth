@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import type { SMEProfile, KBEntry, InterviewMessage } from '@/types'
-import { TOPIC_BY_ID } from '@/lib/taxonomy'
+import type { TopicEntry } from '@/lib/taxonomy-types'
 
 type View = 'dashboard' | 'new_interview' | 'review_entry'
 
@@ -11,8 +11,25 @@ export default function SMEOnboarding({ smeProfile }: { smeProfile: SMEProfile }
   const [selectedEntry, setSelectedEntry] = useState<KBEntry | null>(null)
   const [entries, setEntries] = useState<KBEntry[]>([])
   const [loadingEntries, setLoadingEntries] = useState(false)
+  const [topicById, setTopicById] = useState<Record<string, TopicEntry>>({})
 
   useEffect(() => { loadEntries() }, [])
+  useEffect(() => {
+    let active = true
+
+    fetch(`/api/taxonomy?domain=${encodeURIComponent(smeProfile.domain)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!active || !Array.isArray(data.topics)) return
+        setTopicById(prev => ({
+          ...prev,
+          ...Object.fromEntries(data.topics.map((topic: TopicEntry) => [topic.id, topic])),
+        }))
+      })
+      .catch(() => {})
+
+    return () => { active = false }
+  }, [smeProfile.domain])
 
   const loadEntries = async () => {
     setLoadingEntries(true)
@@ -29,6 +46,7 @@ export default function SMEOnboarding({ smeProfile }: { smeProfile: SMEProfile }
     return (
       <InterviewFlow
         smeProfile={smeProfile}
+        topicById={topicById}
         onComplete={() => { setView('dashboard'); loadEntries() }}
         onBack={() => setView('dashboard')}
       />
@@ -40,6 +58,7 @@ export default function SMEOnboarding({ smeProfile }: { smeProfile: SMEProfile }
       <EntryReview
         entry={selectedEntry}
         smeId={smeProfile.sme_id}
+        topicById={topicById}
         onComplete={() => { setView('dashboard'); loadEntries() }}
         onBack={() => setView('dashboard')}
       />
@@ -77,7 +96,7 @@ export default function SMEOnboarding({ smeProfile }: { smeProfile: SMEProfile }
         <div className="flex flex-wrap gap-2">
           {(smeProfile.topics || []).map(id => (
             <span key={id} className="bg-[#e20074]/20 text-[#e20074] text-sm px-3 py-1 rounded-full border border-[#e20074]/30">
-              {TOPIC_BY_ID[id]?.display || id}
+              {topicById[id]?.display || id}
             </span>
           ))}
           {(smeProfile.topics || []).length === 0 && (
@@ -119,7 +138,7 @@ export default function SMEOnboarding({ smeProfile }: { smeProfile: SMEProfile }
                 <div>
                   <h4 className="text-white text-sm font-medium">
                     {(Array.isArray(entry.topic_tag) ? entry.topic_tag : [entry.topic_tag])
-                      .map(id => TOPIC_BY_ID[id]?.display || id).join(' · ')}
+                      .map(id => topicById[id]?.display || id).join(' · ')}
                   </h4>
                   <p className="text-white/40 text-xs mt-1 line-clamp-1">{entry.question_framing}</p>
                 </div>
@@ -145,7 +164,7 @@ export default function SMEOnboarding({ smeProfile }: { smeProfile: SMEProfile }
                 <div>
                   <h4 className="text-white text-sm font-medium">
                     {(Array.isArray(entry.topic_tag) ? entry.topic_tag : [entry.topic_tag])
-                      .map(id => TOPIC_BY_ID[id]?.display || id).join(', ')}
+                      .map(id => topicById[id]?.display || id).join(', ')}
                   </h4>
                   <p className="text-white/30 text-xs mt-0.5 line-clamp-1">{entry.question_framing}</p>
                 </div>
@@ -162,8 +181,8 @@ export default function SMEOnboarding({ smeProfile }: { smeProfile: SMEProfile }
 // ============================================
 // Returning-SME interview flow (screens 5-8 inline)
 // ============================================
-function InterviewFlow({ smeProfile, onComplete, onBack }: {
-  smeProfile: SMEProfile; onComplete: () => void; onBack: () => void
+function InterviewFlow({ smeProfile, topicById, onComplete, onBack }: {
+  smeProfile: SMEProfile; topicById: Record<string, TopicEntry>; onComplete: () => void; onBack: () => void
 }) {
   const [messages, setMessages] = useState<InterviewMessage[]>([])
   const [input, setInput] = useState('')
@@ -265,7 +284,7 @@ function InterviewFlow({ smeProfile, onComplete, onBack }: {
           {kbEntries.map((e, i) => (
             <div key={e.entry_id || i} className="bg-white/5 border border-white/10 rounded-xl p-4">
               <p className="text-white text-sm font-medium">
-                {(Array.isArray(e.topic_tag) ? e.topic_tag : [e.topic_tag]).map(id => TOPIC_BY_ID[id]?.display || id).join(' · ')}
+                {(Array.isArray(e.topic_tag) ? e.topic_tag : [e.topic_tag]).map(id => topicById[id]?.display || id).join(' · ')}
               </p>
               <p className="text-white/50 text-xs mt-1">{e.question_framing}</p>
             </div>
@@ -320,8 +339,8 @@ function InterviewFlow({ smeProfile, onComplete, onBack }: {
 // ============================================
 // Entry Review (SME approve/reject)
 // ============================================
-function EntryReview({ entry, smeId, onComplete, onBack }: {
-  entry: KBEntry; smeId: string; onComplete: () => void; onBack: () => void
+function EntryReview({ entry, smeId, topicById, onComplete, onBack }: {
+  entry: KBEntry; smeId: string; topicById: Record<string, TopicEntry>; onComplete: () => void; onBack: () => void
 }) {
   const [synthesizedAnswer, setSynthesizedAnswer] = useState(entry.synthesized_answer)
   const [loading, setLoading] = useState(false)
@@ -368,7 +387,7 @@ function EntryReview({ entry, smeId, onComplete, onBack }: {
           <div className="flex gap-2 flex-wrap">
             {tags.map((id, i) => (
               <span key={id} className={`text-xs px-2 py-1 rounded-full ${i === 0 ? 'bg-[#e20074]/20 text-[#e20074] border border-[#e20074]/30' : 'bg-white/5 text-white/50'}`}>
-                {TOPIC_BY_ID[id]?.display || id}
+                {topicById[id]?.display || id}
               </span>
             ))}
           </div>

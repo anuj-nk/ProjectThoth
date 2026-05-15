@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check, Search } from 'lucide-react'
 import type { InterviewMessage, KBEntry, RoutingPreference } from '@/types'
-import { CAREER_SERVICES_TOPICS, TOPIC_BY_ID } from '@/lib/taxonomy'
+import type { DomainEntry, TopicEntry } from '@/lib/taxonomy-types'
 
 // ============================================
 // Stage ribbon — 3 stages matching prototype
@@ -43,12 +44,30 @@ const CHANNEL_LABELS: Record<Channel, string> = {
   in_person: 'In person / by appointment',
 }
 
+const DOMAIN_CATEGORY_LABELS: Record<string, string> = {
+  academic: 'Academic & student support',
+  career: 'Career & professional development',
+  business: 'Business & strategy',
+  go_to_market: 'Go-to-market',
+  technology: 'Technology',
+  telecom: 'Telecom',
+  hardware: 'Hardware & physical spaces',
+  health_social: 'Health & social impact',
+  creative: 'Creative & media',
+  other: 'Other',
+}
+
 export default function SMERegisterPage() {
   const router = useRouter()
   const [screen, setScreen] = useState<Screen>('paste')
   const [rawInput, setRawInput] = useState('')
   const [extractError, setExtractError] = useState('')
   const [unmatchedTopics, setUnmatchedTopics] = useState<string[]>([])
+  const [domains, setDomains] = useState<DomainEntry[]>([])
+  const [domainTopics, setDomainTopics] = useState<TopicEntry[]>([])
+  const [topicById, setTopicById] = useState<Record<string, TopicEntry>>({})
+  const [taxonomyLoading, setTaxonomyLoading] = useState(false)
+  const [taxonomyError, setTaxonomyError] = useState('')
 
   const [draft, setDraft] = useState<DraftProfile>({
     full_name: '', email: '', title: '',
@@ -73,6 +92,38 @@ export default function SMERegisterPage() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    let active = true
+    setTaxonomyLoading(true)
+
+    fetch(`/api/taxonomy?domain=${encodeURIComponent(draft.domain)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!active) return
+        if (data.error) throw new Error(data.error)
+        const nextDomains: DomainEntry[] = Array.isArray(data.domains) ? data.domains : []
+        const nextTopics: TopicEntry[] = Array.isArray(data.topics) ? data.topics : []
+
+        setTaxonomyError('')
+        if (nextDomains.length > 0) setDomains(nextDomains)
+        setDomainTopics(nextTopics)
+        setTopicById(prev => ({
+          ...prev,
+          ...Object.fromEntries(nextTopics.map(topic => [topic.id, topic])),
+        }))
+      })
+      .catch((error) => {
+        if (!active) return
+        setDomainTopics([])
+        setTaxonomyError(error.message || 'Unable to load taxonomy from Supabase.')
+      })
+      .finally(() => {
+        if (active) setTaxonomyLoading(false)
+      })
+
+    return () => { active = false }
+  }, [draft.domain])
 
   // ── Stage + nav helpers ──────────────────────────────────────────────────
 
@@ -279,6 +330,7 @@ export default function SMERegisterPage() {
   }
 
   const approvedCount = entryStates.filter(s => s.approval === 'approved').length
+  const selectedDomainLabel = domains.find(domain => domain.value === draft.domain)?.label || draft.domain
 
   // ═══════════════════════════════════════════════════════════════════════
   // RENDER
@@ -387,9 +439,17 @@ export default function SMERegisterPage() {
                 ))}
                 <div style={{ marginBottom: 14 }}>
                   <div style={fieldLabelStyle}>Domain</div>
-                  <div style={{ padding: '8px 12px', background: 'var(--beige)', borderRadius: 6, fontSize: 14 }}>
-                    Career Services
-                  </div>
+                  <DomainPicker
+                    domains={domains}
+                    selectedValue={draft.domain}
+                    loading={taxonomyLoading && domains.length === 0}
+                    onChange={domain => setDraft(d => ({ ...d, domain, topics: [], exclusions: [] }))}
+                  />
+                  {domains.length === 0 && (
+                    <div style={{ ...warningBoxStyle, marginTop: 8 }}>
+                      Domains are loading from Supabase. If this does not resolve, check database auth and the `sme_domains` table.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -402,8 +462,10 @@ export default function SMERegisterPage() {
                   Couldn't match to taxonomy: <strong>{unmatchedTopics.join(', ')}</strong>. Select the closest topics below or they'll go to the admin queue.
                 </div>
               )}
+              {taxonomyError && <div style={{ ...errorStyle, marginBottom: 10 }}>{taxonomyError}</div>}
               <div style={chipAreaStyle}>
-                {CAREER_SERVICES_TOPICS.map(t => (
+                {taxonomyLoading && <span style={{ color: 'var(--text-3)', fontSize: 14, margin: '3px 4px' }}>Loading topics...</span>}
+                {!taxonomyLoading && domainTopics.map(t => (
                   <span
                     key={t.id}
                     onClick={() => toggleTopic(t.id)}
@@ -412,6 +474,11 @@ export default function SMERegisterPage() {
                     {draft.topics.includes(t.id) ? '★' : '☆'} {t.display}
                   </span>
                 ))}
+                {!taxonomyLoading && domainTopics.length === 0 && (
+                  <span style={{ color: 'var(--text-3)', fontSize: 14, margin: '3px 4px' }}>
+                    No seeded topics yet for {selectedDomainLabel}. Unmatched topics will be queued for admin review.
+                  </span>
+                )}
               </div>
             </div>
 
@@ -432,7 +499,7 @@ export default function SMERegisterPage() {
             <h2 style={{ ...h2Style, marginTop: 12 }}>Which topics are NOT your responsibility?</h2>
             <p style={{ fontSize: 15, color: 'var(--text-2)', marginBottom: 12 }}>Check anything outside your scope. Leave things you DO own unchecked.</p>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginBottom: 16 }}>
-              {CAREER_SERVICES_TOPICS.map(t => {
+              {domainTopics.map(t => {
                 const checked = draft.exclusions.includes(t.id)
                 return (
                   <label key={t.id} style={{
@@ -626,6 +693,7 @@ export default function SMERegisterPage() {
               <EntryCard
                 key={es.entry.entry_id || idx}
                 state={es}
+                topicById={topicById}
                 onChange={(answer) =>
                   setEntryStates(prev => prev.map((s, i) =>
                     i === idx ? { ...s, answer, approval: 'pending' } : s
@@ -779,8 +847,126 @@ function StageLabel({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 15, color: 'var(--wine)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 8, fontWeight: 600 }}>{children}</div>
 }
 
-function EntryCard({ state, onChange, onApprove, onReject }: {
+function DomainPicker({
+  domains,
+  selectedValue,
+  loading,
+  onChange,
+}: {
+  domains: DomainEntry[]
+  selectedValue: string
+  loading: boolean
+  onChange: (value: string) => void
+}) {
+  const [query, setQuery] = useState('')
+  const [expanded, setExpanded] = useState(false)
+  const selectedDomain = domains.find(domain => domain.value === selectedValue)
+  const normalizedQuery = query.trim().toLowerCase()
+
+  const groupedDomains = useMemo(() => {
+    const matches = domains.filter(domain => {
+      if (!normalizedQuery) return true
+      return [
+        domain.label,
+        domain.value.replace(/_/g, ' '),
+        DOMAIN_CATEGORY_LABELS[domain.category] || domain.category,
+      ].some(text => text.toLowerCase().includes(normalizedQuery))
+    })
+
+    return matches.reduce<Record<string, DomainEntry[]>>((groups, domain) => {
+      const key = domain.category || 'other'
+      groups[key] = [...(groups[key] || []), domain]
+      return groups
+    }, {})
+  }, [domains, normalizedQuery])
+
+  const categoryKeys = Object.keys(groupedDomains).sort((a, b) => {
+    if (a === 'other') return 1
+    if (b === 'other') return -1
+    return (DOMAIN_CATEGORY_LABELS[a] || a).localeCompare(DOMAIN_CATEGORY_LABELS[b] || b)
+  })
+
+  const selectDomain = (value: string) => {
+    onChange(value)
+    setQuery('')
+    setExpanded(false)
+  }
+
+  return (
+    <div style={domainPickerStyle}>
+      <div style={domainSelectedStyle}>
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--text-3)', marginBottom: 2 }}>Thoth's best match</div>
+          <div style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-1)' }}>
+            {selectedDomain?.label || selectedValue || 'Choose a domain'}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {selectedDomain?.category && (
+            <span style={domainCategoryPillStyle}>
+              {DOMAIN_CATEGORY_LABELS[selectedDomain.category] || selectedDomain.category}
+            </span>
+          )}
+          <button type="button" onClick={() => setExpanded(open => !open)} style={domainChangeButtonStyle}>
+            {expanded ? 'Done' : 'Change'}
+          </button>
+        </div>
+      </div>
+
+      {expanded && (
+        <>
+          <label style={domainSearchStyle}>
+            <Search size={16} aria-hidden="true" />
+            <input
+              value={query}
+              onChange={event => setQuery(event.target.value)}
+              placeholder="Search domains or browse by group"
+              style={domainSearchInputStyle}
+              autoFocus
+            />
+          </label>
+
+          <div style={domainListStyle}>
+            {loading && (
+              <div style={domainEmptyStyle}>Loading domains...</div>
+            )}
+            {!loading && categoryKeys.map(category => (
+              <div key={category} style={{ marginBottom: 12 }}>
+                <div style={domainGroupHeaderStyle}>
+                  {DOMAIN_CATEGORY_LABELS[category] || category.replace(/_/g, ' ')}
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  {groupedDomains[category].map(domain => {
+                    const selected = domain.value === selectedValue
+                    return (
+                      <button
+                        key={domain.value}
+                        type="button"
+                        onClick={() => selectDomain(domain.value)}
+                        style={selected ? domainOptionSelectedStyle : domainOptionStyle}
+                        aria-pressed={selected}
+                      >
+                        <span>{domain.label}</span>
+                        {selected && <Check size={16} aria-hidden="true" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+            {!loading && domains.length > 0 && categoryKeys.length === 0 && (
+              <div style={domainEmptyStyle}>No domains match "{query}". Try a broader term.</div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function EntryCard({ state, topicById, onChange, onApprove, onReject }: {
   state: EntryState
+  topicById: Record<string, TopicEntry>
   onChange: (v: string) => void
   onApprove: () => void
   onReject: () => void
@@ -800,7 +986,7 @@ function EntryCard({ state, onChange, onApprove, onReject }: {
           <div style={{ marginBottom: 6 }}>
             {tags.map((tag, i) => (
               <span key={tag} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', background: i === 0 ? 'var(--wine)' : 'var(--wine-light)', color: i === 0 ? 'white' : 'var(--wine)', borderRadius: 12, fontSize: 14, margin: '3px 4px 3px 0', fontWeight: i === 0 ? 500 : 400 }}>
-                {i === 0 ? '★' : '☆'} {TOPIC_BY_ID[tag]?.display || tag}
+                {i === 0 ? '★' : '☆'} {topicById[tag]?.display || tag}
               </span>
             ))}
           </div>
@@ -862,6 +1048,17 @@ const inputStyle: React.CSSProperties = { width: '100%', padding: '11px 14px', b
 const colLabelStyle: React.CSSProperties = { fontSize: 14, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-3)', marginBottom: 8, fontWeight: 600 }
 const fieldLabelStyle: React.CSSProperties = { fontSize: 14, fontWeight: 500, color: 'var(--text-1)', marginBottom: 6 }
 const sourceBoxStyle: React.CSSProperties = { background: 'var(--beige)', padding: 16, borderRadius: 10, fontSize: 15, color: 'var(--text-1)', whiteSpace: 'pre-wrap', fontFamily: "'SF Mono', Monaco, monospace", lineHeight: 1.6, minHeight: 120 }
+const domainPickerStyle: React.CSSProperties = { border: '1px solid var(--border)', borderRadius: 12, background: 'white', overflow: 'hidden' }
+const domainSelectedStyle: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', padding: '12px 14px', background: 'var(--beige)', borderBottom: '1px solid var(--border)' }
+const domainCategoryPillStyle: React.CSSProperties = { flexShrink: 0, padding: '4px 9px', borderRadius: 999, background: 'white', border: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 12, fontWeight: 600 }
+const domainChangeButtonStyle: React.CSSProperties = { padding: '5px 11px', borderRadius: 999, border: '1px solid var(--tm-magenta)', background: 'white', color: 'var(--tm-magenta)', fontFamily: 'inherit', fontSize: 13, fontWeight: 700, cursor: 'pointer' }
+const domainSearchStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px', borderBottom: '1px solid var(--border)', color: 'var(--text-3)' }
+const domainSearchInputStyle: React.CSSProperties = { width: '100%', border: 'none', outline: 'none', fontFamily: 'inherit', fontSize: 15, color: 'var(--text-1)', background: 'transparent' }
+const domainListStyle: React.CSSProperties = { maxHeight: 270, overflowY: 'auto', padding: '12px 12px 4px' }
+const domainGroupHeaderStyle: React.CSSProperties = { fontSize: 12, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-3)', fontWeight: 700, marginBottom: 6 }
+const domainOptionStyle: React.CSSProperties = { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 10px', border: '1px solid var(--border)', borderRadius: 8, background: 'white', color: 'var(--text-1)', fontFamily: 'inherit', fontSize: 14, textAlign: 'left', cursor: 'pointer' }
+const domainOptionSelectedStyle: React.CSSProperties = { ...domainOptionStyle, borderColor: 'var(--tm-magenta)', background: 'var(--wine-light)', color: 'var(--wine)', fontWeight: 600 }
+const domainEmptyStyle: React.CSSProperties = { padding: '14px 8px', color: 'var(--text-3)', fontSize: 14 }
 const chipAreaStyle: React.CSSProperties = { padding: 10, border: '1px solid var(--border)', borderRadius: 8, background: 'white', minHeight: 48 }
 const chipStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px', background: 'var(--wine-light)', color: 'var(--wine)', borderRadius: 14, fontSize: 14, margin: '3px 4px', cursor: 'pointer', border: '1px solid transparent' }
 const chipPrimaryStyle: React.CSSProperties = { ...chipStyle, background: 'var(--wine)', color: 'white', fontWeight: 500 }

@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { smeApi } from '@/lib/supabase'
 import { extractProfile } from '@/lib/claude'
-import { normalizeTopics, normalizeDomain, VALID_DOMAINS } from '@/lib/taxonomy'
+import { getDomainValues, normalizeDomainFromDb, normalizeTopicsFromDb } from '@/lib/taxonomy-db'
 import type { CreateSMEProfile } from '@/types'
 
 export async function POST(req: NextRequest) {
@@ -26,15 +26,18 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'raw_input required' }, { status: 400 })
       }
 
-      const draft = await extractProfile(raw_input)
+      const domains = await getDomainValues()
+      const draft = await extractProfile(raw_input, domains)
+      const canonicalDomain = await normalizeDomainFromDb(draft.domain) ?? 'other'
 
       // Normalize extracted topics against controlled vocabulary
       const rawTopics: string[] = draft.topics || []
-      const { matched, unmatched } = normalizeTopics(rawTopics)
+      const { matched, unmatched } = await normalizeTopicsFromDb(rawTopics, canonicalDomain)
 
       return NextResponse.json({
         draft_profile: {
           ...draft,
+          domain: canonicalDomain,
           topics: matched,         // taxonomy IDs
           raw_topics: rawTopics,   // original strings before normalization
         },
@@ -54,11 +57,12 @@ export async function POST(req: NextRequest) {
 
     // P7: normalize domain before insert so display-form values
     // ("Career Services") don't trip the Postgres CHECK constraint.
-    const canonicalDomain = normalizeDomain(domain)
+    const canonicalDomain = await normalizeDomainFromDb(domain)
     if (!canonicalDomain) {
+      const domains = await getDomainValues()
       return NextResponse.json(
         {
-          error: `Invalid domain "${domain}". Allowed values: ${VALID_DOMAINS.join(', ')}`,
+          error: `Invalid domain "${domain}". Allowed values: ${domains.join(', ')}`,
           code: 'INVALID_DOMAIN',
         },
         { status: 400 }

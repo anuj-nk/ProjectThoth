@@ -11,7 +11,7 @@ export interface SMEProfile {
   full_name: string
   email: string
   title?: string
-  domain: 'academics' | 'career_services' | 'facilities' | 'prototyping_lab' | 'admissions' | 'it_purchasing' | 'student_wellbeing' | 'other'
+  domain: string
   topics: string[]
   exclusions: string[]
   routing_preferences: RoutingPreference[]
