@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { handleUserQuery, generateEmbedding } from '@/lib/claude'
-import { kbApi, smeApi, queryLogApi } from '@/lib/supabase'
+import { kbApi, smeApi, adminQueueApi } from '@/lib/supabase'
 import { v4 as uuidv4 } from 'uuid'
 
 export async function POST(req: NextRequest) {
@@ -23,26 +23,35 @@ export async function POST(req: NextRequest) {
     const questionEmbedding = await generateEmbedding(question)
 
     // Step 2: Semantic search against approved KB
-    const threshold = parseFloat(process.env.NEXT_PUBLIC_CONFIDENCE_THRESHOLD || '0.75')
-    const kbResults = await kbApi.semanticSearch(questionEmbedding, threshold - 0.1, 5)
-    // Note: we search slightly below threshold to give Claude context even for borderline matches
+    const threshold = parseFloat(process.env.CONFIDENCE_THRESHOLD || '0.75')
+    const kbResults = await kbApi.semanticSearch(questionEmbedding, 0.3, 5)
 
-    // Step 3: Get all active SMEs for routing
+    // Step 3: Get all SMEs for routing
     const allSMEs = await smeApi.getAll()
 
     // Step 4: Let Claude decide what to do
     const result = await handleUserQuery(question, kbResults, allSMEs)
 
-    // Step 5: Log the query for analytics
-    await queryLogApi.log({
-      session_id: sessionId,
-      question,
-      answer: result.answer,
-      action_taken: result.action,
-      kb_entries_used: result.kb_entries_used,
-      sme_routed_to: result.routed_sme?.id,
-      confidence_score: result.confidence_score
-    })
+    // Step 5: Push unhandled queries to admin queue
+    if (result.action === 'routed_admin') {
+      try {
+        await adminQueueApi.create({
+          source: 'user_query',
+          signal_type: 'routed_admin',
+          payload: {
+            question,
+            session_id: sessionId,
+            kb_matches_found: kbResults.length,
+            highest_similarity: kbResults[0]?.similarity || 0
+          }
+        })
+      } catch (queueErr) {
+        // Non-fatal: log but don't fail the user request
+        console.error('Failed to enqueue admin signal:', queueErr)
+      }
+    }
+
+    // Step 6: Query logging is planned for CI-2 (query_logs table not yet built)
 
     return NextResponse.json({
       result,

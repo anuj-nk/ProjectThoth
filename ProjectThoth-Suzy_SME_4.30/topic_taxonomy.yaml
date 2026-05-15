@@ -1,0 +1,156 @@
+# Project Thoth — Topic Taxonomy v0.1
+# Controlled vocabulary for `knowledge_entries.topic_tag` and routing.
+#
+# Field reference:
+#   id            canonical topic_id (snake_case, used in DB)
+#   display       human-readable name (UI chips, SME review)
+#   domain        which domain this topic lives under
+#   aliases       alt spellings / abbreviations (used by query topic extractor)
+#   parent_id     hierarchical parent (for cascade fallback retrieval)
+#   owner_sme_id  which SME owns this topic for routing
+#                 null = no owner yet → route to admin
+#   exposable     default `exposable_to_users` for entries tagged here
+#                 (per-entry value can override)
+#   routing_note  free-text rule shown to admins / used in prompts
+#
+# ─── Admin contract (the system's "I don't know" path) ─────
+# `owner_sme_id` may be null for topics that exist in vocabulary but
+# currently have no human owner. Queries that resolve only to such
+# topics will be routed to the admin via the `route_admin` decision
+# in `langgraph_user_query.py`, and a row will be written to the
+# `admin_queue` table. Admin then decides:
+#   • assign an existing SME       → status='resolved', topic gains an owner
+#   • spawn a new SME onboarding   → status='needs_sme'
+#   • mark out of scope            → status='dismissed'
+#
+# The `admin_queue` table also receives every `unmatched_topic_text`
+# captured during SME interview — i.e. the SME described a topic that's
+# missing from this YAML. This is how the controlled vocabulary grows:
+# admin promotes an unmatched_topic_text into a new entry below.
+# Status transitions are tracked in admin_queue.status (5-value enum).
+
+domains:
+  - id: career_services
+    display: "Career Services & Industry Engagement"
+
+topics:
+
+  # ───────────── Career Services ─────────────
+
+  - id: international_student
+    display: "International Student (general)"
+    domain: career_services
+    aliases: [intl student, international, foreign student, f-1 student, f1 student]
+    parent_id: null
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: visa
+    display: "Visa & Immigration"
+    domain: career_services
+    aliases: [student visa, f-1, f1, immigration, status]
+    parent_id: international_student
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: cpt
+    display: "CPT (Curricular Practical Training)"
+    domain: career_services
+    aliases: [curricular practical training, c.p.t., cpt application, cpt timeline]
+    parent_id: visa
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: opt
+    display: "OPT (Optional Practical Training)"
+    domain: career_services
+    aliases: [optional practical training, o.p.t., post-completion opt, stem opt]
+    parent_id: visa
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: i20
+    display: "I-20 Form"
+    domain: career_services
+    aliases: [i 20, i-20, form i-20, i-20 form, i-20 update]
+    parent_id: visa
+    owner_sme_id: uw_iss_office          # explicit exclusion: routes OUT of Patrick
+    exposable: true
+    routing_note: "I-20 status decisions go to UW ISS Office, not Career Services."
+
+  - id: internship
+    display: "Internship (general)"
+    domain: career_services
+    aliases: [intern, internships, internship program]
+    parent_id: null
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: techin_601
+    display: "TECHIN 601 Enrollment"
+    domain: career_services
+    aliases: [techin601, tech in 601, enrollment course, internship enrollment]
+    parent_id: internship
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: internship_search
+    display: "Internship Search"
+    domain: career_services
+    aliases: [job search, finding an internship, applications]
+    parent_id: internship
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: offer_negotiation
+    display: "Offer & Negotiation"
+    domain: career_services
+    aliases: [offer letter, negotiation, signing bonus, relocation, equity]
+    parent_id: internship
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: career_coaching
+    display: "Career Coaching"
+    domain: career_services
+    aliases: [coaching, career advice, mentorship]
+    parent_id: null
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: industry_networking
+    display: "Industry Networking"
+    domain: career_services
+    aliases: [networking, industry events, employer connections]
+    parent_id: null
+    owner_sme_id: patrick_chidsey
+    exposable: true
+
+  - id: fee_waiver
+    display: "Fee Waiver / Payment Issues"
+    domain: career_services
+    aliases: [waiver, payment issue, financial hardship, tuition help]
+    parent_id: techin_601
+    owner_sme_id: patrick_chidsey
+    exposable: false                     # case-by-case → always route, never answer
+    routing_note: "Always route to Patrick; never answer fee_waiver directly."
+
+  # Career Services — out-of-scope (exclusions)
+  - id: course_petitions
+    display: "MSTI Course Petitions & Independent Study"
+    domain: career_services
+    aliases:
+      [petition, course petition, independent study, course waiver,
+       waive course, course substitution, transfer credit, msti waiver]
+    parent_id: null
+    owner_sme_id: jason_evans
+    exposable: true
+    routing_note: "Submit via the MSTI Course Petition Zoho form; Jason reviews completeness."
+
+  - id: transcripts
+    display: "Academic Transcripts"
+    domain: career_services
+    aliases: [transcript, gpa, academic record, academic standing]
+    parent_id: null
+    owner_sme_id: jason_evans
+    exposable: true

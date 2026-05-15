@@ -1,25 +1,70 @@
 // ============================================
 // API: /api/sme/onboard
-// Create or retrieve a persistent SME profile
+// Actions:
+//   POST { action: 'extract', raw_input }  → draft profile (no DB write)
+//   POST { action: 'create', ...fields }   → save profile to DB
+//   POST { ...fields } (no action)         → create profile (legacy)
+//   GET  ?email=                           → fetch by email
+//   GET  (no params)                       → list all SMEs
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { smeApi } from '@/lib/supabase'
+import { extractProfile } from '@/lib/claude'
+import { normalizeTopics, normalizeDomain, VALID_DOMAINS } from '@/lib/taxonomy'
 import type { CreateSMEProfile } from '@/types'
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { email, name, role, contact_info, topics_owned, topics_not_owned } = body
+    const { action } = body
 
-    if (!email || !name || !role) {
+    // --- LLM profile extraction (no DB write) ---
+    if (action === 'extract') {
+      const { raw_input } = body
+      if (!raw_input?.trim()) {
+        return NextResponse.json({ error: 'raw_input required' }, { status: 400 })
+      }
+
+      const draft = await extractProfile(raw_input)
+
+      // Normalize extracted topics against controlled vocabulary
+      const rawTopics: string[] = draft.topics || []
+      const { matched, unmatched } = normalizeTopics(rawTopics)
+
+      return NextResponse.json({
+        draft_profile: {
+          ...draft,
+          topics: matched,         // taxonomy IDs
+          raw_topics: rawTopics,   // original strings before normalization
+        },
+        unmatched_topics: unmatched,  // caller should surface to user
+      })
+    }
+
+    // --- Create / upsert SME profile ---
+    const { full_name, email, title, domain, topics, exclusions, routing_preferences } = body
+
+    if (!full_name || !email || !domain) {
       return NextResponse.json(
-        { error: 'email, name, and role are required' },
+        { error: 'full_name, email, and domain are required' },
         { status: 400 }
       )
     }
 
-    // Check if SME already exists
+    // P7: normalize domain before insert so display-form values
+    // ("Career Services") don't trip the Postgres CHECK constraint.
+    const canonicalDomain = normalizeDomain(domain)
+    if (!canonicalDomain) {
+      return NextResponse.json(
+        {
+          error: `Invalid domain "${domain}". Allowed values: ${VALID_DOMAINS.join(', ')}`,
+          code: 'INVALID_DOMAIN',
+        },
+        { status: 400 }
+      )
+    }
+
     const existing = await smeApi.getByEmail(email)
     if (existing) {
       return NextResponse.json({
@@ -29,22 +74,21 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // Create new profile
     const profile = await smeApi.create({
+      full_name,
       email,
-      name,
-      role,
-      contact_info: contact_info || {},
-      topics_owned: topics_owned || [],
-      topics_not_owned: topics_not_owned || [],
+      title: title || undefined,
+      domain: canonicalDomain,
+      topics: topics || [],
+      exclusions: exclusions || [],
+      routing_preferences: routing_preferences || [],
       availability: 'available',
-      is_active: true
     } as CreateSMEProfile)
 
     return NextResponse.json({
       profile,
       created: true,
-      message: `Welcome, ${name}! Your SME profile has been created.`
+      message: `Welcome, ${full_name}! Your SME profile has been created.`
     })
   } catch (error: any) {
     console.error('SME onboard error:', error)
@@ -59,7 +103,6 @@ export async function GET(req: NextRequest) {
   const email = req.nextUrl.searchParams.get('email')
 
   if (!email) {
-    // Return all SMEs (for admin/routing)
     const smes = await smeApi.getAll()
     return NextResponse.json({ smes })
   }

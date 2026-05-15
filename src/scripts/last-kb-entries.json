@@ -1,0 +1,38 @@
+[
+  {
+    "topic_tag": "cpt_process_steps",
+    "question_framing": "What steps should a student follow after receiving an internship offer to ensure a smooth start?",
+    "synthesized_answer": "First review the offer for salary, benefits, and dates, then register for TECHIN 601 (CPT fee $59/credit). File the CPT application at least 90 days before the internship start, bring the printed CPT approval letter on official letterhead, and complete onboarding paperwork on day one. Students often skip the 90‑day rule or fail to print the CPT letter correctly, causing delays.",
+    "exposable_to_users": true
+  },
+  {
+    "topic_tag": "cpt_tacit_mistakes",
+    "question_framing": "What subtle mistake do students make with CPT that isn’t in the handbook?",
+    "synthesized_answer": "Students treat the CPT approval letter as a generic PDF, but employers require it printed on university letterhead and signed by the department chair or faculty sponsor. Submitting a scanned copy often leads to HR rejection and onboarding delays.",
+    "exposable_to_users": true
+  },
+  {
+    "topic_tag": "career_services_routing",
+    "question_framing": "Which career‑services questions should be routed to other GIX offices?",
+    "synthesized_answer": "Questions about F‑1 visa restrictions, academic course conflicts, major changes, unpaid‑internship policy for internationals, or entrepreneurship programs belong to ISS, Academic Advising, the Registrar, or the Entrepreneurship Team. These should always be forwarded to the appropriate office.",
+    "exposable_to_users": true
+  },
+  {
+    "topic_tag": "internship_checklist_template",
+    "question_framing": "What does the internship acceptance checklist include and how can students use it?",
+    "synthesized_answer": "The checklist covers reviewing the offer, confirming dates with an advisor, registering for TECHIN 601, submitting the CPT application, updating Handshake, scheduling resume and interview prep sessions, gathering required documents, meeting the career liaison, and confirming first‑day details. Students can copy the plain‑text version into Google Docs or PDF and follow the steps to stay organized.",
+    "exposable_to_users": true
+  },
+  {
+    "topic_tag": "information_update_frequency",
+    "question_framing": "How often does the CPT and internship information change?",
+    "synthesized_answer": "CPT fee and registration update annually; CPT application form and workflow update quarterly; internship checklist and templates update bi‑annually; general career‑services guidance is updated as needed. Routing contacts and staff changes are reviewed quarterly.",
+    "exposable_to_users": true
+  },
+  {
+    "topic_tag": "sensitive_topic_handling",
+    "question_framing": "Which student‑specific topics must never be answered directly by an automated system?",
+    "synthesized_answer": "Any question involving F‑1 visa status, SEVIS records, GPA, financial aid, unpaid‑internship eligibility for internationals, course conflicts, major changes, health or disability accommodations, or confidential salary details must be routed to the appropriate GIX office; the system should only flag and forward the query.",
+    "exposable_to_users": false
+  }
+]

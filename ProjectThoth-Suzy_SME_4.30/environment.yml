@@ -1,0 +1,40 @@
+name: thoth
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+      # LangGraph + LangChain
+      - langgraph>=0.2.0
+      - langgraph-checkpoint-postgres
+      - langchain-core
+      - langchain-community
+      - langchain-text-splitters
+
+      # LLM providers
+      - anthropic
+      - openai
+
+      # Supabase + Postgres
+      - supabase
+      - psycopg[binary]>=3.1
+      - pgvector
+
+      # Tooling
+      - python-dotenv
+      - pyyaml
+      - pydantic>=2
+      - tiktoken
+      - pypdf
+      - numpy
+
+      # Backend (only if not using Next.js API routes)
+      - fastapi
+      - uvicorn[standard]
+
+      # Dev
+      - jupyter
+      - ipykernel
+      - rich
