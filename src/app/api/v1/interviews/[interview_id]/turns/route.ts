@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireBenchmarkAuth } from '@/lib/auth'
 import { smeApi, interviewApi, interviewV1Api } from '@/lib/supabase'
-import { callLLM, SME_INTERVIEW_SYSTEM_PROMPT } from '@/lib/claude'
+import { callLLM, INTERVIEW_MODEL, SME_INTERVIEW_SYSTEM_PROMPT } from '@/lib/claude'
 import { buildAdaptiveInterviewPrompt, loadSeedQuestionLibrary } from '@/lib/interview-seeds'
 
 // P6: build a focused system prompt that pins the interview to a specific
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ int
     llmMessages.push({ role: 'user', content: body.sme_response })
 
     // Generate next question with the focused (topic + seed library) prompt
-    const llmResult = await callLLM(systemPrompt, llmMessages, 400)
+    const llmResult = await callLLM(systemPrompt, llmMessages, 400, INTERVIEW_MODEL)
     const isComplete = turnNumber >= 15 || llmResult.text.includes("I think I have a solid understanding")
 
     const ts = new Date().toISOString()

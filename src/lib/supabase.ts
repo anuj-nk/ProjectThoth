@@ -302,10 +302,66 @@ export const adminQueueApi = {
     source: 'user_query' | 'sme_intake'
     signal_type: string
     payload: Record<string, any>
+    topic_guess?: string
+    priority?: 'low' | 'normal' | 'high'
+    assigned_sme_id?: string | null
   }) {
+    const question = typeof entry.payload?.question === 'string'
+      ? entry.payload.question.trim()
+      : ''
+    const normalizedQuestion = question.toLowerCase().replace(/\s+/g, ' ')
+
+    if (entry.source === 'user_query' && normalizedQuestion) {
+      const { data: existing, error: existingError } = await supabaseAdmin
+        .from('admin_queue')
+        .select('*')
+        .eq('source', entry.source)
+        .eq('signal_type', entry.signal_type)
+        .eq('payload->>normalized_question', normalizedQuestion)
+        .in('status', ['pending', 'in_review', 'needs_sme'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingError) throw existingError
+
+      if (existing) {
+        const { data, error } = await supabaseAdmin
+          .from('admin_queue')
+          .update({
+            occurrence_count: (existing.occurrence_count || 1) + 1,
+            last_seen_at: new Date().toISOString(),
+            payload: {
+              ...(existing.payload || {}),
+              latest_question: question,
+              latest_session_id: entry.payload.session_id,
+              kb_matches_found: entry.payload.kb_matches_found,
+              highest_similarity: entry.payload.highest_similarity,
+              confidence_score: entry.payload.confidence_score,
+            }
+          })
+          .eq('queue_id', existing.queue_id)
+          .select()
+          .single()
+        if (error) throw error
+        return data
+      }
+    }
+
     const { data, error } = await supabaseAdmin
       .from('admin_queue')
-      .insert({ ...entry, status: 'pending' })
+      .insert({
+        source: entry.source,
+        signal_type: entry.signal_type,
+        payload: normalizedQuestion
+          ? { ...entry.payload, normalized_question: normalizedQuestion }
+          : entry.payload,
+        topic_guess: entry.topic_guess,
+        priority: entry.priority || 'normal',
+        assigned_sme_id: entry.assigned_sme_id || null,
+        last_seen_at: new Date().toISOString(),
+        status: 'pending'
+      })
       .select()
       .single()
     if (error) throw error
@@ -316,10 +372,40 @@ export const adminQueueApi = {
     const { data, error } = await supabaseAdmin
       .from('admin_queue')
       .select('*')
-      .in('status', ['pending', 'in_review'])
+      .in('status', ['pending', 'in_review', 'needs_sme'])
       .order('created_at', { ascending: false })
     if (error) throw error
     return data || []
+  },
+
+  async assignSme(queue_id: string, assigned_sme_id: string, priority?: 'low' | 'normal' | 'high') {
+    const { data, error } = await supabaseAdmin
+      .from('admin_queue')
+      .update({
+        assigned_sme_id,
+        priority: priority || 'normal',
+        status: 'needs_sme'
+      })
+      .eq('queue_id', queue_id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  },
+
+  async markNeedsSme(queue_id: string, topic_guess?: string, priority?: 'low' | 'normal' | 'high') {
+    const { data, error } = await supabaseAdmin
+      .from('admin_queue')
+      .update({
+        status: 'needs_sme',
+        topic_guess,
+        priority: priority || 'normal'
+      })
+      .eq('queue_id', queue_id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
   },
 
   async resolve(queue_id: string, resolution: string, resolved_by: string) {

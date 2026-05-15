@@ -39,7 +39,7 @@ Direct mapping to the 8 scored capabilities from the brief.
 | 5 | **SME Review & Admin Approval** | ✅ Working | Two-tier gate: SME approve → `pending_review`; Admin publish → `approved` + embedding generated. |
 | 6 | **Knowledge-Grounded Q&A** | ✅ Working | pgvector similarity search → LLM answer with cited sources. Confidence threshold env-configurable. |
 | 7 | **Clarifying Follow-ups** | ✅ Working | Ambiguous queries return `action: clarified` with a clarifying question before retrieval. |
-| 8 | **Routing & Escalation** | ✅ Working | Low-confidence → SME redirect (all relevant candidates surfaced). No-match → admin fallback queue. |
+| 8 | **Routing & Escalation** | ✅ Working | Low-confidence → SME redirect (all relevant candidates surfaced). No-match → Knowledge Gaps inbox for admin follow-up. |
 
 **Additional design considerations from the brief:**
 
@@ -145,7 +145,7 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design, ER diagram, a
 | Framework | Next.js 16 (App Router) | Full-stack, co-located API routes, easy Vercel deploy |
 | Language | TypeScript | Type safety across API ↔ DB ↔ UI boundary |
 | Styling | Tailwind CSS + custom tokens | Rapid iteration with brand-consistent design system |
-| LLM | OpenRouter `gpt-oss-20b:free` + Groq fallback | Free tier, provider-agnostic `callLLM()` wrapper |
+| LLM | OpenRouter free models + Groq fallback; interviews prefer `openai/gpt-4.1-mini` | Free default for most flows, paid interview model for stronger follow-up questions |
 | Embeddings | OpenAI `text-embedding-3-small` (1536-dim) / HuggingFace fallback | Quality + cost balance |
 | Database | Supabase Postgres + pgvector | Managed, vector similarity search built in |
 | File storage | Supabase Storage | Integrated with DB auth, generous free tier |
@@ -192,6 +192,7 @@ In your Supabase project's **SQL Editor**, run the migrations in order:
 
 Or paste the contents of each `.sql` file directly into the SQL Editor. This creates:
 - `sme_profiles`, `knowledge_entries`, `raw_transcripts`, `interview_sessions`, `admin_queue`
+- `admin_queue` powers the Knowledge Gaps inbox: routed-admin questions, unmatched topics, assignment to SMEs, and repeated-question counts.
 - The `match_kb_entries` pgvector similarity function
 
 Enable the **pgvector** extension in Supabase: Dashboard → Database → Extensions → `vector`.
@@ -256,10 +257,33 @@ Copy `.env.example` to `.env.local`. Never commit `.env.local`.
 | `HUGGINGFACE_API_KEY` | ✅* | Free embedding fallback (`all-MiniLM-L6-v2`, 384-dim). Required if no `OPENAI_API_KEY` |
 | `GROQ_API_KEY` | optional | LLM fallback when OpenRouter rate-limits. Recommended for reliability |
 | `LLM_PROVIDER` | optional | `openrouter` (default) or `groq` |
+| `INTERVIEW_MODEL` | optional | OpenRouter model used for interview planning and live interview turns. Defaults to `openai/gpt-4.1-mini`; set to a `:free` model to minimize paid usage |
 | `CONFIDENCE_THRESHOLD` | optional | Float 0–1, default `0.75`. Controls SME routing vs. direct answer |
 | `BENCHMARK_API_KEY` | ✅ | Secret key for benchmark evaluator authentication. Set to any strong random string |
 
 > \* At least one embedding provider (`OPENAI_API_KEY` or `HUGGINGFACE_API_KEY`) is required. If both are set, OpenAI is used and produces 1536-dim embeddings. HuggingFace produces 384-dim embeddings — **do not mix** after initial setup, as dimensions must match the `match_kb_entries` function.
+
+### Interview Model Budget
+
+Most Project Thoth LLM flows still use the existing free OpenRouter model fallback list. The SME interview path is intentionally stronger: `generateInterviewPlan()` and live interview follow-up turns prefer `INTERVIEW_MODEL`, which defaults to `openai/gpt-4.1-mini`.
+
+As of May 2026, OpenRouter lists `openai/gpt-4.1-mini` at about `$0.40 / 1M input tokens` and `$1.60 / 1M output tokens`. For this app, that usually means:
+
+| Interview usage | Rough budget impact |
+|-----------------|---------------------|
+| Tailored interview plan | `$0.002-$0.004` |
+| First interview question | `$0.001-$0.003` |
+| Each follow-up turn | `$0.002-$0.008`, depending on transcript length |
+| Typical 8-10 turn SME interview | `$0.02-$0.05` |
+| Long 15 turn SME interview | `$0.04-$0.08` |
+
+To limit spend:
+
+- Set OpenRouter account spend limits before demos or classroom testing.
+- Keep interviews to the existing 15-turn cap unless there is a clear reason to extend it.
+- Lower the interview `maxTokens` values in `src/lib/claude.ts` if responses become too long.
+- Set `INTERVIEW_MODEL` to a free OpenRouter model, such as `openai/gpt-oss-20b:free`, when running bulk testing.
+- Avoid repeatedly restarting interviews for the same SME/topic; each start generates a new plan and first question.
 
 ---
 
@@ -279,7 +303,7 @@ project-thoth/
 │   │       ├── kb/
 │   │       │   └── approve/route.ts  # Two-tier approval + embedding generation
 │   │       ├── query/route.ts        # User Q&A, clarification, routing
-│   │       ├── admin/queue/route.ts  # Admin signal queue
+│   │       ├── admin/queue/route.ts  # Knowledge Gaps inbox actions
 │   │       └── v1/                   # Standardized benchmark API (all 8 capabilities)
 │   ├── components/
 │   │   ├── user/UserChat.tsx         # User Q&A interface (Iris)

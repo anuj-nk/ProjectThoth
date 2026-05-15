@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Search } from 'lucide-react'
+import { Check, Mic, Search, Square } from 'lucide-react'
 import type { InterviewMessage, KBEntry, RoutingPreference } from '@/types'
 import type { DomainEntry, TopicEntry } from '@/lib/taxonomy-types'
 
@@ -81,6 +81,8 @@ export default function SMERegisterPage() {
   const [chatInput, setChatInput] = useState('')
   const [chatLoading, setChatLoading] = useState(false)
   const [interviewDone, setInterviewDone] = useState(false)
+  const [voiceState, setVoiceState] = useState<'idle' | 'recording' | 'transcribing' | 'error'>('idle')
+  const [voiceError, setVoiceError] = useState('')
 
   const [entryStates, setEntryStates] = useState<EntryState[]>([])
   const [submitting, setSubmitting] = useState(false)
@@ -89,9 +91,22 @@ export default function SMERegisterPage() {
   const [uploadingFile, setUploadingFile] = useState(false)
 
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const audioStreamRef = useRef<MediaStream | null>(null)
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop()
+      }
+      audioStreamRef.current?.getTracks().forEach(track => track.stop())
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -206,7 +221,8 @@ export default function SMERegisterPage() {
 
   const sendMessage = async () => {
     if (!chatInput.trim() || chatLoading || !interviewId) return
-    const userMsg: InterviewMessage = { role: 'sme', content: chatInput, timestamp: new Date().toISOString() }
+    const messageText = chatInput.trim()
+    const userMsg: InterviewMessage = { role: 'sme', content: messageText, timestamp: new Date().toISOString() }
     setMessages(prev => [...prev, userMsg])
     setChatInput('')
     setChatLoading(true)
@@ -214,13 +230,102 @@ export default function SMERegisterPage() {
       const res = await fetch('/api/sme/interview', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'message', interview_id: interviewId, message: chatInput })
+        body: JSON.stringify({ action: 'message', interview_id: interviewId, message: messageText })
       })
       const data = await res.json()
       setMessages(prev => [...prev, { role: 'assistant', content: data.message, timestamp: new Date().toISOString() }])
       if (data.status === 'completed') setInterviewDone(true)
     } finally {
       setChatLoading(false)
+    }
+  }
+
+  const getSupportedAudioMimeType = () => {
+    if (typeof MediaRecorder === 'undefined') return ''
+    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']
+    return candidates.find(type => MediaRecorder.isTypeSupported(type)) || ''
+  }
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    setVoiceState('transcribing')
+    setVoiceError('')
+
+    try {
+      const formData = new FormData()
+      const extension = audioBlob.type.includes('mp4') ? 'mp4' : 'webm'
+      const audioFile = new File([audioBlob], `interview-response.${extension}`, {
+        type: audioBlob.type || 'audio/webm',
+      })
+      formData.append('audio', audioFile)
+
+      const res = await fetch('/api/audio/transcribe', {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Transcription failed')
+      }
+
+      const transcript = String(data.text || '').trim()
+      if (!transcript) {
+        throw new Error('No speech detected')
+      }
+
+      setChatInput(prev => prev.trim() ? `${prev.trim()} ${transcript}` : transcript)
+      setVoiceState('idle')
+    } catch (error) {
+      setVoiceState('error')
+      setVoiceError(error instanceof Error ? error.message : 'Transcription failed')
+    }
+  }
+
+  const startVoiceRecording = async () => {
+    if (chatLoading || voiceState === 'transcribing') return
+
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setVoiceState('error')
+      setVoiceError('Microphone recording is not supported in this browser.')
+      return
+    }
+
+    try {
+      setVoiceError('')
+      audioChunksRef.current = []
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      audioStreamRef.current = stream
+      const mimeType = getSupportedAudioMimeType()
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+
+      recorder.ondataavailable = event => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data)
+      }
+
+      recorder.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || 'audio/webm',
+        })
+        stream.getTracks().forEach(track => track.stop())
+        audioStreamRef.current = null
+        mediaRecorderRef.current = null
+        audioChunksRef.current = []
+        void transcribeAudio(audioBlob)
+      }
+
+      mediaRecorderRef.current = recorder
+      recorder.start()
+      setVoiceState('recording')
+    } catch (error) {
+      setVoiceState('error')
+      setVoiceError(error instanceof Error ? error.message : 'Unable to access microphone.')
+    }
+  }
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop()
     }
   }
 
@@ -609,15 +714,50 @@ export default function SMERegisterPage() {
             </div>
 
             <div style={{ padding: '16px 28px 24px' }}>
-              <textarea
-                rows={2}
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
-                placeholder="Type your response... (Enter to send)"
-                style={{ ...textareaStyle, resize: 'none' }}
-                disabled={chatLoading}
-              />
+              <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+                <textarea
+                  rows={2}
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), sendMessage())}
+                  placeholder={voiceState === 'recording' ? 'Listening...' : 'Type or record your response... (Enter to send)'}
+                  style={{ ...textareaStyle, resize: 'none' }}
+                  disabled={chatLoading || voiceState === 'transcribing'}
+                />
+                <button
+                  type="button"
+                  onClick={voiceState === 'recording' ? stopVoiceRecording : startVoiceRecording}
+                  disabled={chatLoading || voiceState === 'transcribing'}
+                  title={voiceState === 'recording' ? 'Stop recording' : 'Record response'}
+                  aria-label={voiceState === 'recording' ? 'Stop recording' : 'Record response'}
+                  style={{
+                    width: 48,
+                    minWidth: 48,
+                    borderRadius: 10,
+                    border: voiceState === 'recording' ? '1px solid var(--danger)' : '1px solid var(--border-strong)',
+                    background: voiceState === 'recording' ? 'var(--danger-bg)' : 'white',
+                    color: voiceState === 'recording' ? 'var(--danger)' : 'var(--wine)',
+                    cursor: chatLoading || voiceState === 'transcribing' ? 'not-allowed' : 'pointer',
+                    opacity: chatLoading || voiceState === 'transcribing' ? 0.5 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {voiceState === 'recording' ? <Square size={18} /> : <Mic size={19} />}
+                </button>
+              </div>
+              {(voiceState === 'recording' || voiceState === 'transcribing' || voiceError) && (
+                <div style={{
+                  marginTop: 8,
+                  fontSize: 13,
+                  color: voiceState === 'error' ? 'var(--danger)' : 'var(--text-3)',
+                }}>
+                  {voiceState === 'recording' && 'Recording... click stop when you finish.'}
+                  {voiceState === 'transcribing' && 'Transcribing your response...'}
+                  {voiceState === 'error' && voiceError}
+                </div>
+              )}
 
               {/* File upload */}
               <div style={{ marginTop: 12 }}>
@@ -653,12 +793,12 @@ export default function SMERegisterPage() {
               <BtnRow>
                 {interviewDone ? (
                   <>
-                    <button onClick={sendMessage} disabled={chatLoading || !chatInput.trim()} style={!chatLoading && chatInput.trim() ? btnPrimary : btnDisabled}>Send</button>
+                    <button onClick={sendMessage} disabled={chatLoading || voiceState === 'transcribing' || !chatInput.trim()} style={!chatLoading && voiceState !== 'transcribing' && chatInput.trim() ? btnPrimary : btnDisabled}>Send</button>
                     <button onClick={handleSynthesize} style={{ ...btnSuccess, marginLeft: 'auto' }}>Synthesize my knowledge →</button>
                   </>
                 ) : (
                   <>
-                    <button onClick={sendMessage} disabled={chatLoading || !chatInput.trim()} style={!chatLoading && chatInput.trim() ? btnPrimary : btnDisabled}>Send</button>
+                    <button onClick={sendMessage} disabled={chatLoading || voiceState === 'transcribing' || !chatInput.trim()} style={!chatLoading && voiceState !== 'transcribing' && chatInput.trim() ? btnPrimary : btnDisabled}>Send</button>
                     <button onClick={handleSynthesize} style={{ ...btnTertiary, marginLeft: 'auto', fontSize: 12 }}>End interview early</button>
                   </>
                 )}

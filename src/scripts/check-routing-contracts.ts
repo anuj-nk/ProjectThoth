@@ -43,6 +43,13 @@ checks.push([
 ])
 
 checks.push([
+  'root migrations upgrade admin_queue into knowledge gap inbox',
+  /assigned_sme_id\s+UUID/i.test(migrations)
+    && /occurrence_count\s+INT/i.test(migrations)
+    && /last_seen_at\s+TIMESTAMPTZ/i.test(migrations),
+])
+
+checks.push([
   'root migrations define match_kb_entries RPC for RAG',
   /CREATE OR REPLACE FUNCTION (public\.)?match_kb_entries/i.test(migrations)
     && /query_embedding\s+vector\(1536\)/i.test(migrations),

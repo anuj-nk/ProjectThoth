@@ -42,8 +42,17 @@ export async function POST(req: NextRequest) {
             question,
             session_id: sessionId,
             kb_matches_found: kbResults.length,
-            highest_similarity: kbResults[0]?.similarity || 0
-          }
+            highest_similarity: kbResults[0]?.similarity || 0,
+            confidence_score: result.confidence_score,
+            routing_reason: result.routing_reason,
+            user_visible_reason: result.answer || result.clarifying_question || 'Routed to admin'
+          },
+          topic_guess: kbResults[0]?.topic_tag
+            ? Array.isArray(kbResults[0].topic_tag)
+              ? kbResults[0].topic_tag[0]
+              : kbResults[0].topic_tag
+            : undefined,
+          priority: kbResults.length === 0 ? 'high' : 'normal'
         })
       } catch (queueErr) {
         // Non-fatal: log but don't fail the user request

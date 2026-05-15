@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import type { KBEntry, AdminQueueEntry } from '@/types'
+import type { KBEntry, AdminQueueEntry, SMEProfile } from '@/types'
 
 const s: Record<string, React.CSSProperties> = {
   page:       { maxWidth: 900, margin: '0 auto', padding: '40px 28px' },
@@ -16,6 +16,8 @@ const s: Record<string, React.CSSProperties> = {
   empty:      { background: 'white', border: '1px solid var(--border)', borderRadius: 24, padding: 48, textAlign: 'center' as const },
   btnApprove: { background: '#F0FDF4', color: '#15803D', border: '1px solid #86EFAC', borderRadius: 999, fontSize: 14, padding: '7px 16px', cursor: 'pointer', fontWeight: 600 },
   btnReject:  { background: '#FEF2F2', color: '#B91C1C', border: '1px solid #FECACA', borderRadius: 999, fontSize: 14, padding: '7px 16px', cursor: 'pointer', fontWeight: 600 },
+  btnNeutral: { background: 'white', color: 'var(--text-2)', border: '1px solid var(--border-strong)', borderRadius: 20, fontSize: 14, padding: '7px 14px', cursor: 'pointer', fontWeight: 600 },
+  select:     { background: 'white', color: 'var(--text-1)', border: '1px solid var(--border-strong)', borderRadius: 18, fontSize: 14, padding: '7px 10px', minWidth: 190 },
   overlay:    { position: 'fixed' as const, inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, zIndex: 50 },
   modal:      { background: 'white', border: '1px solid var(--border)', borderRadius: 28, padding: 36, maxWidth: 640, width: '100%', maxHeight: '82vh', overflowY: 'auto' as const, boxShadow: '0 12px 48px rgba(0,0,0,0.14)' },
   fieldLbl:   { fontSize: 12, color: 'var(--text-3)', textTransform: 'uppercase' as const, letterSpacing: '0.06em', marginBottom: 6, fontWeight: 700 },
@@ -24,10 +26,12 @@ const s: Record<string, React.CSSProperties> = {
 export default function AdminDashboard() {
   const [pending, setPending] = useState<KBEntry[]>([])
   const [queue, setQueue] = useState<AdminQueueEntry[]>([])
+  const [smes, setSmes] = useState<SMEProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<KBEntry | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [tab, setTab] = useState<'kb' | 'queue'>('kb')
+  const [assignments, setAssignments] = useState<Record<string, string>>({})
 
   useEffect(() => { loadDashboard() }, [])
 
@@ -43,6 +47,11 @@ export default function AdminDashboard() {
       if (queueRes.ok) {
         const queueData = await queueRes.json()
         setQueue(queueData.entries || [])
+      }
+      const smeRes = await fetch('/api/sme/onboard')
+      if (smeRes.ok) {
+        const smeData = await smeRes.json()
+        setSmes(smeData.smes || [])
       }
     } finally {
       setLoading(false)
@@ -76,6 +85,44 @@ export default function AdminDashboard() {
   const topicLabel = (tag: string | string[]) =>
     (Array.isArray(tag) ? tag : [tag]).map(t => t.replace(/_/g, ' ')).join(' · ')
 
+  const queueQuestion = (item: AdminQueueEntry) =>
+    String(item.payload?.question || item.payload?.latest_question || item.payload?.unmatched_topic || JSON.stringify(item.payload).slice(0, 160))
+
+  const queueReason = (item: AdminQueueEntry) =>
+    String(item.payload?.routing_reason || item.payload?.user_visible_reason || item.signal_type.replace(/_/g, ' '))
+
+  const assignedSme = (item: AdminQueueEntry) =>
+    smes.find(sme => sme.sme_id === item.assigned_sme_id)
+
+  const handleQueueAction = async (payload: Record<string, any>) => {
+    setActionLoading(true)
+    try {
+      await fetch('/api/admin/queue', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })
+      await loadDashboard()
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleAssign = async (item: AdminQueueEntry) => {
+    const assigned_sme_id = assignments[item.queue_id] || item.assigned_sme_id
+    if (!assigned_sme_id) return
+    await handleQueueAction({
+      action: 'assign_sme',
+      queue_id: item.queue_id,
+      assigned_sme_id,
+      priority: item.priority || 'normal'
+    })
+  }
+
+  const openGaps = queue.filter(item => ['pending', 'in_review', 'needs_sme'].includes(item.status))
+  const needsSme = queue.filter(item => item.status === 'needs_sme')
+  const repeated = queue.filter(item => (item.occurrence_count || 1) > 1)
+
   return (
     <div style={s.page}>
       <h2 style={s.h1}>Admin Dashboard</h2>
@@ -84,8 +131,8 @@ export default function AdminDashboard() {
       <div style={s.statGrid}>
         {[
           { label: 'Pending Review', value: pending.length, accent: '#92600A' },
-          { label: 'Admin Queue', value: queue.length, accent: '#9A3412' },
-          { label: 'Active SMEs', value: '—', accent: 'var(--text-3)' },
+          { label: 'Open Gaps', value: openGaps.length, accent: '#9A3412' },
+          { label: 'Repeated Questions', value: repeated.length, accent: 'var(--text-3)' },
         ].map(stat => (
           <div key={stat.label} style={s.statCard}>
             <div style={s.statLabel}>{stat.label}</div>
@@ -98,7 +145,7 @@ export default function AdminDashboard() {
       <div style={s.tabBar}>
         {([
           { key: 'kb' as const, label: `KB Queue (${pending.length})` },
-          { key: 'queue' as const, label: `Admin Queue (${queue.length})` },
+          { key: 'queue' as const, label: `Knowledge Gaps (${openGaps.length})` },
         ]).map(t => (
           <button
             key={t.key}
@@ -175,35 +222,123 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* Admin Queue Tab */}
+      {/* Knowledge Gaps Tab */}
       {tab === 'queue' && (
         <div>
-          <div style={s.sectionHd}>Unhandled Signals ({queue.length})</div>
+          <div style={s.sectionHd}>Knowledge Gaps ({openGaps.length})</div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+            {[
+              { label: 'Needs SME', value: needsSme.length },
+              { label: 'Repeated', value: repeated.length },
+              { label: 'High Priority', value: queue.filter(item => item.priority === 'high').length },
+            ].map(metric => (
+              <div key={metric.label} style={{ border: '1px solid var(--border)', borderRadius: 18, padding: '8px 12px', background: 'white' }}>
+                <span style={{ color: 'var(--text-3)', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{metric.label}</span>
+                <span style={{ color: 'var(--text-1)', fontSize: 16, fontWeight: 700, marginLeft: 8 }}>{metric.value}</span>
+              </div>
+            ))}
+          </div>
           {queue.length === 0 ? (
             <div style={s.empty}>
-              <p style={{ color: 'var(--text-3)', fontSize: 16 }}>Queue is clear</p>
-              <p style={{ color: 'var(--text-3)', fontSize: 14, marginTop: 6 }}>Unmatched topics and low-confidence queries appear here</p>
+              <p style={{ color: 'var(--text-3)', fontSize: 16 }}>No open knowledge gaps</p>
+              <p style={{ color: 'var(--text-3)', fontSize: 14, marginTop: 6 }}>Routed questions and unmatched topics will appear here</p>
             </div>
           ) : (
             queue.map(item => (
               <div key={item.queue_id} style={{ ...s.card, cursor: 'default' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <span style={{ fontSize: 12, padding: '3px 10px', background: '#FFF7ED', color: '#9A3412', borderRadius: 12, fontWeight: 600 }}>
-                      {item.source}
-                    </span>
-                    <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{item.signal_type}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                      <span style={{ fontSize: 12, padding: '3px 10px', background: '#FFF7ED', color: '#9A3412', borderRadius: 12, fontWeight: 600 }}>
+                        {item.source === 'user_query' ? 'User question' : 'SME intake'}
+                      </span>
+                      <span style={{ fontSize: 12, padding: '3px 10px', background: item.status === 'needs_sme' ? '#EFF6FF' : 'var(--beige)', color: item.status === 'needs_sme' ? '#1D4ED8' : 'var(--text-2)', borderRadius: 12, fontWeight: 600 }}>
+                        {item.status.replace(/_/g, ' ')}
+                      </span>
+                      {(item.occurrence_count || 1) > 1 && (
+                        <span style={{ fontSize: 12, padding: '3px 10px', background: '#F0FDF4', color: '#15803D', borderRadius: 12, fontWeight: 600 }}>
+                          Asked {item.occurrence_count}x
+                        </span>
+                      )}
+                      {item.priority === 'high' && (
+                        <span style={{ fontSize: 12, padding: '3px 10px', background: '#FEF2F2', color: '#B91C1C', borderRadius: 12, fontWeight: 600 }}>
+                          High priority
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-1)', lineHeight: 1.45, marginBottom: 6 }}>
+                      {queueQuestion(item)}
+                    </div>
+                    <div style={{ fontSize: 14, color: 'var(--text-2)', lineHeight: 1.5 }}>
+                      {queueReason(item)}
+                    </div>
                   </div>
-                  <span style={{ fontSize: 13, color: 'var(--text-3)' }}>{new Date(item.created_at).toLocaleDateString()}</span>
+                  <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                    <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
+                      {new Date(item.last_seen_at || item.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
                 </div>
-                <p style={{ fontSize: 15, color: 'var(--text-1)', lineHeight: 1.6 }}>
-                  {typeof item.payload === 'object' ? (item.payload as any).question || JSON.stringify(item.payload).slice(0, 120) : String(item.payload).slice(0, 120)}
-                </p>
-                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                  <button style={{ fontSize: 14, color: 'var(--text-2)', background: 'white', border: '1px solid var(--border-strong)', borderRadius: 20, padding: '6px 14px', cursor: 'pointer' }}>
-                    Mark resolved
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                  <div>
+                    <div style={s.fieldLbl}>Best KB Match</div>
+                    <p style={{ fontSize: 14, color: 'var(--text-1)' }}>
+                      {typeof item.payload?.highest_similarity === 'number'
+                        ? `${Math.round(item.payload.highest_similarity * 100)}%`
+                        : 'None'}
+                    </p>
+                  </div>
+                  <div>
+                    <div style={s.fieldLbl}>Topic Guess</div>
+                    <p style={{ fontSize: 14, color: 'var(--text-1)' }}>{item.topic_guess?.replace(/_/g, ' ') || 'Unclassified'}</p>
+                  </div>
+                  <div>
+                    <div style={s.fieldLbl}>Assigned SME</div>
+                    <p style={{ fontSize: 14, color: 'var(--text-1)' }}>{assignedSme(item)?.full_name || 'Unassigned'}</p>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <select
+                    value={assignments[item.queue_id] || item.assigned_sme_id || ''}
+                    onChange={e => setAssignments(prev => ({ ...prev, [item.queue_id]: e.target.value }))}
+                    style={s.select}
+                    aria-label="Assign SME"
+                  >
+                    <option value="">Assign SME</option>
+                    {smes.map(sme => (
+                      <option key={sme.sme_id} value={sme.sme_id}>
+                        {sme.full_name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => handleAssign(item)}
+                    disabled={actionLoading || !(assignments[item.queue_id] || item.assigned_sme_id)}
+                    style={{ ...s.btnNeutral, opacity: actionLoading || !(assignments[item.queue_id] || item.assigned_sme_id) ? 0.5 : 1 }}
+                  >
+                    Assign
                   </button>
-                  <button style={{ fontSize: 14, color: 'var(--text-3)', background: 'white', border: '1px solid var(--border)', borderRadius: 20, padding: '6px 14px', cursor: 'pointer' }}>
+                  <button
+                    onClick={() => handleQueueAction({ action: 'mark_needs_sme', queue_id: item.queue_id, topic_guess: item.topic_guess, priority: item.priority || 'normal' })}
+                    disabled={actionLoading}
+                    style={{ ...s.btnNeutral, opacity: actionLoading ? 0.5 : 1 }}
+                  >
+                    Needs SME
+                  </button>
+                  <button
+                    onClick={() => handleQueueAction({ action: 'resolve', queue_id: item.queue_id, resolution: 'Knowledge gap reviewed by admin', resolved_by: 'admin' })}
+                    disabled={actionLoading}
+                    style={{ ...s.btnApprove, opacity: actionLoading ? 0.5 : 1 }}
+                  >
+                    Resolve
+                  </button>
+                  <button
+                    onClick={() => handleQueueAction({ action: 'dismiss', queue_id: item.queue_id })}
+                    disabled={actionLoading}
+                    style={{ ...s.btnReject, opacity: actionLoading ? 0.5 : 1 }}
+                  >
                     Dismiss
                   </button>
                 </div>

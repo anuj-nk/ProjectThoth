@@ -34,6 +34,10 @@ const FREE_MODELS = [
   'openai/gpt-oss-20b:free',
 ]
 
+// Paid interview model. Keep other flows on free/fallback routing unless they
+// explicitly opt into this model.
+export const INTERVIEW_MODEL = process.env.INTERVIEW_MODEL || 'openai/gpt-4.1-mini'
+
 // Groq models — fast reliable fallback
 const GROQ_MODELS = [
   'llama-3.3-70b-versatile',
@@ -397,7 +401,8 @@ Rules:
           general_seed_question_playbook: seedQuestions,
         }, null, 2),
       }],
-      1200
+      1200,
+      INTERVIEW_MODEL
     )
 
     const parsed = parseJSON<{ questions?: unknown }>(text, { questions: fallback })
@@ -524,7 +529,12 @@ export async function conductInterview(
     smeProfile: options?.smeProfile,
     interviewPlan: options?.interviewPlan,
   })
-  return askLLMText(`${buildInterviewSystemPrompt(seedQuestions)}\n\n${adaptivePrompt}`, fullMessages, 400)
+  return askLLMText(
+    `${buildInterviewSystemPrompt(seedQuestions)}\n\n${adaptivePrompt}`,
+    fullMessages,
+    400,
+    INTERVIEW_MODEL
+  )
 }
 
 export async function synthesizeKBEntries(

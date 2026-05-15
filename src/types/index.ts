@@ -125,6 +125,7 @@ export interface QueryResult {
 // ============================================
 export type AdminQueueStatus = 'pending' | 'in_review' | 'resolved' | 'needs_sme' | 'dismissed'
 export type AdminQueueSource = 'user_query' | 'sme_intake'
+export type AdminQueuePriority = 'low' | 'normal' | 'high'
 
 export interface AdminQueueEntry {
   queue_id: string
@@ -132,6 +133,12 @@ export interface AdminQueueEntry {
   signal_type: string           // e.g. 'low_confidence_query' | 'unmatched_topic' | 'routed_admin'
   status: AdminQueueStatus
   payload: Record<string, any>  // original query text, unmatched topic strings, etc.
+  assigned_sme_id?: string | null
+  topic_guess?: string | null
+  priority?: AdminQueuePriority
+  duplicate_of?: string | null
+  last_seen_at?: string | null
+  occurrence_count?: number
   resolution?: string
   resolved_by?: string
   created_at: string

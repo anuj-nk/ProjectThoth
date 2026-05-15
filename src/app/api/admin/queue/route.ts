@@ -18,7 +18,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { action, queue_id, resolution, resolved_by } = body
+    const { action, queue_id, resolution, resolved_by, assigned_sme_id, topic_guess, priority } = body
 
     if (action === 'resolve') {
       if (!queue_id || !resolution) {
@@ -31,6 +31,20 @@ export async function POST(req: NextRequest) {
     if (action === 'dismiss') {
       if (!queue_id) return NextResponse.json({ error: 'queue_id required' }, { status: 400 })
       const entry = await adminQueueApi.dismiss(queue_id)
+      return NextResponse.json({ entry })
+    }
+
+    if (action === 'assign_sme') {
+      if (!queue_id || !assigned_sme_id) {
+        return NextResponse.json({ error: 'queue_id and assigned_sme_id required' }, { status: 400 })
+      }
+      const entry = await adminQueueApi.assignSme(queue_id, assigned_sme_id, priority)
+      return NextResponse.json({ entry })
+    }
+
+    if (action === 'mark_needs_sme') {
+      if (!queue_id) return NextResponse.json({ error: 'queue_id required' }, { status: 400 })
+      const entry = await adminQueueApi.markNeedsSme(queue_id, topic_guess, priority)
       return NextResponse.json({ entry })
     }
 
